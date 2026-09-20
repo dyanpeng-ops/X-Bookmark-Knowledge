@@ -72,8 +72,11 @@ Phase 9 — external link extraction (`src/external/`):
 
 ## Hard stop
 
-Do not start Phase 9 without authorization. Do not write into `knowledge/` outside the configured
-knowledge directory. Never record credentials, cookies or tokens in project files, logs or task notes.
+Do not start Phase 9 without authorization. **Verification is gated (user rule, 2026-09-20): read-only
+inspection is allowed, but running tests, any network access (`ls-remote` / `clone` / `fetch` / `push`),
+and any write to disk / database / knowledge require explicit approval — present the pending-verification
+list and wait.** Do not write into `knowledge/` outside the configured knowledge directory. Never record
+credentials, cookies or tokens in project files, logs or task notes.
 
 ## Audit follow-up
 
