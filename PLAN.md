@@ -304,7 +304,7 @@ sync --skip-collect: media rows : 0 new, 0 updated, 6 unchanged   ← 本地路�
 
 1. 知识库终点：项目内产出 → 交接上级 `inbox/X-Bookmarks/`（替代直接写 `knowledge/`）。
 2. Python 解释器固定为 3.12.13。
-3. 是否执行 `git init`（当前为否）。
+3. ~~是否执行 `git init`~~ → 已定（2026-09-20）：已初始化并推送到**私有**仓库 `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git`（远程名 `X-Bookmark-Knowledge`，分支 `main`）；真实书签内容与媒体资产**不入库**（`knowledge/*` 被忽略，仅 `knowledge/X-Bookmarks/README.md` 跟踪）。
 4. ~~认证路径优先级~~ → 已实测确定：**Firefox 会话为主**，手工 Cookie / OAuth 仅作备选。
 5. ~~Phase 8 前：视频是否本地化~~ → 已定（2026-09-20）：`media.download_video: false` 为默认，视频/动图**不**本地化（跳过原因写入 `media.error_message`），需要时改配置一行即生效。
 6. Phase 11 前：AI 引擎选型。

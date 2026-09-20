@@ -86,6 +86,10 @@ Phase 9 (external link extraction) is **not** authorized to start yet.
 
 ## Notes
 
+- Version control: initialised and pushed to the **private** GitHub repo
+  `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git` (remote name `X-Bookmark-Knowledge`, branch
+  `main`, first commit `94da817`). Real bookmark content stays local: `knowledge/*` is gitignored except
+  `knowledge/X-Bookmarks/README.md`; `config/config.yaml`, `data/`, `.venv/` and `*.db` remain untracked.
 - Acceptance command: `.venv\Scripts\python.exe -B -m unittest discover -s tests -t .` → 272 tests, exit 0.
 - Real-data commands: `.venv\Scripts\python.exe -B -m src.cli sync` (or `sync --skip-collect` offline),
   `.venv\Scripts\python.exe -B -m src.cli media` (add `--dry-run` to inspect first), and

@@ -22,6 +22,10 @@
   atomic copy, skip rules, dry-run, stale-path reconciliation.
 - `src/cli/` — `python -m src.cli sync|media|process|status|doctor`, exit codes 0/1/2/3.
   Pipeline order: `sync → media → process`.
+- Version control (2026-09-20): private GitHub remote `X-Bookmark-Knowledge`; `main` tracks
+  `X-Bookmark-Knowledge/main` from commit `94da817`. Real bookmark content is deliberately **not**
+  versioned (`knowledge/*` ignored except its README); secrets stay local (`config/config.yaml`,
+  `data/`, `.venv/`, `*.db`).
 - Real-data acceptance (2026-09-20): `media --dry-run` → 6/6 resolvable; `media` first run
   `copied: 6 / failed: 0`; second run `copied: 0 / unchanged: 6`; all six `media.local_path` values
   now point inside `knowledge/X-Bookmarks/{YYYY}/{MM}/assets/{tweet_id}/` and match the

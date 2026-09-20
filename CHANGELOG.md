@@ -9,6 +9,27 @@
 
 ---
 
+## [Repo] 2026-09-20 — 首次建立版本控制并推送到私有仓库
+
+### Added
+
+- `.gitignore` 新增知识库策略：`knowledge/*` 默认忽略，逐层放行后**仅**跟踪 `knowledge/X-Bookmarks/README.md`（四行式 `!` 规则——被排除目录内部无法用 `!` 找回文件，这是唯一正确写法）
+- 提交身份写入**仓库本地**配置：`dyanpeng-ops` / `dyanpeng-ops@users.noreply.github.com`（noreply 邮箱，不暴露真实地址）
+
+### Decided
+
+- 版本控制由用户授权启用（关闭 PLAN.md §5.3）：远程为**私有**仓库 `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git`，远程名 `X-Bookmark-Knowledge`（**不是** `origin`），分支 `main`
+- 真实书签内容与本地媒体资产**不上传**（仅保留 `knowledge/X-Bookmarks/README.md`）；`.workbuddy/`（宿主侧 Agent 日志）按用户决定保留跟踪
+
+### Verified
+
+- 首个提交 `94da817`：73 个文件 / 12,725 行；`git ls-remote` 远端 `refs/heads/main` 与本地 HEAD 完全一致
+- 推送内容核查：不含 `config/config.yaml`、`data/`、`.venv/`、`*.db`；`knowledge/` 下仅 1 个文件（README）
+- 磁盘核查：`knowledge/X-Bookmarks/` 下 12 个文件（5 Markdown + 6 媒体 + README）**全部原样保留**，未被删除
+- `git check-ignore` 自检：README 未忽略，书签/媒体命中忽略规则；`config/config.yaml`、`data/state/state.db`、`data/upstream/bookmarks.jsonl` 均 `ignored=True`
+
+---
+
 ## [Phase 8] 2026-09-20 — Media Localisation
 
 ### Added
