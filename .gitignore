@@ -1,0 +1,51 @@
+# ─── 敏感信息（禁止进 Git）───────────────────────────────
+config/config.yaml
+.env
+.env.*
+!.env.example
+
+# Cookie / Token / 凭证
+cookies*
+tokens*
+credentials*
+*_secret*
+*_token.json
+
+# ─── 程序数据（非知识库）────────────────────────────────
+data/
+
+# ─── 数据库与状态 ───────────────────────────────────────
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ─── 日志与缓存 ─────────────────────────────────────────
+*.log
+data/logs/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# ─── 编辑器与系统 ───────────────────────────────────────
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+~$*
+
+# ─── 知识库（本地保留，不进仓库；仅跟踪目录说明）────────────
+# 2026-09-20 决定：真实书签内容与媒体资产不上传；README 保留在版本库中。
+# 以后若想纳管某个文件，用 `git add -f <路径>` 显式覆盖。
+knowledge/*
+!knowledge/X-Bookmarks/
+knowledge/X-Bookmarks/*
+!knowledge/X-Bookmarks/README.md
+knowledge/**/.cache/
+knowledge/**/tmp/

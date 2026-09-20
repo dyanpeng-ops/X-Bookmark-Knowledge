@@ -1,0 +1,11 @@
+# config/ 目录的忽略规则
+#
+# 目的：只让模板进入 Git，真实配置（可能含密钥与个人路径）永不入库。
+#
+# 保留：config.example.yaml、本 .gitignore
+# 忽略：其余全部
+
+*
+!.gitignore
+!config.example.yaml
+!README.md

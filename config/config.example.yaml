@@ -1,0 +1,153 @@
+# ─────────────────────────────────────────────────────────────
+# X Bookmark Knowledge Pipeline — 配置模板
+#
+# 用法：
+#   1. 复制为同目录下的 config.yaml（该文件已被 gitignore）
+#   2. 按需修改路径与开关
+#   3. 不要在本文件中留下任何真实密钥；密钥请走环境变量或本机 config.yaml
+#
+# 说明：本文件的所有默认值只描述"意图"，实现阶段（Phase 4+）会逐项落实。
+#       未实现的键会在 PLAN.md 中标注，不会被静默忽略。
+# ─────────────────────────────────────────────────────────────
+
+version: 1
+
+# ── 路径 ─────────────────────────────────────────────────────
+# 全部使用绝对路径；相对路径一律相对于项目根解析。
+paths:
+  # 项目根（留空 = 自动探测为 src/ 的上级目录）
+  project_root: ""
+
+  # 程序数据（非知识库，已被 gitignore）
+  data_dir: "data"                 # 下含 raw/ state/ logs/
+  raw_dir: "data/raw"              # 逐条原始 JSON 快照，永不删除
+  state_dir: "data/state"          # SQLite 状态库、游标
+  log_dir: "data/logs"             # YYYY-MM-DD.log
+
+  # 用户知识库产出
+  knowledge_dir: "knowledge/X-Bookmarks"
+  knowledge_layout: "year_month"   # year_month → YYYY/MM/YYYYMMDD-{tweet_id}.md
+
+  # 上级 Knowledge-Agent 交接点（Phase 12 才启用，默认关闭）
+  agent_inbox: ""                  # 例：D:\...\01_Knowledge-Agent\inbox\X-Bookmarks
+  agent_inbox_enabled: false
+
+# ── Collector（复用上游 fieldtheory CLI）─────────────────────
+collector:
+  # Phase 5 状态（2026-09-16）：Adapter 已实现于 src/collector/fieldtheory_adapter.py，
+  # 上游字段契约已用真实样本冻结（src/collector/contract.py）。
+  provider: "fieldtheory"          # 已实现的采集源（fieldtheory@1.3.22）
+  # 本机实测（2026-09-15）：PowerShell 中直接调用 `fieldtheory` 会解析到 .ps1 shim，
+  # 被 CurrentUser=RemoteSigned 执行策略拦截且无任何输出；`fieldtheory.cmd` 正常返回 1.3.22。
+  # 因此 Adapter 必须显式使用 .cmd shim 或绝对可执行路径；PowerShell 里也不要用 `ft`
+  # （那是 Format-Table 的内置别名）。
+  executable: "fieldtheory.cmd"
+  executable_args: []              # 前置参数（一般留空；离线验收测试用它注入测试桩）
+
+  # 优先级：本配置值 > 环境变量 FT_DATA_DIR > 上游默认 ~/.fieldtheory/bookmarks（ADR-013）
+  # FT_DATA_DIR 仅在本配置留空时才作为回退（2026-09-16 实测有效；媒体从 C: 迁到 D: 见 ADR-011）
+  upstream_data_dir: ""
+  read_only: true                  # 本项目绝不写入上游目录
+
+  sync:
+    media: false                   # 采集阶段是否让上游下载媒体（本项目 media 阶段可再处理）
+    skip_profile_images: true      # 归档通常不需要作者头像
+    # 2026-09-16 实测：--gaps 会富化 linked article（写入上游 DB，JSONL 只新增 textExpandedAt）；
+    # Article 正文需通过 `fieldtheory list --json` / `show <id> --json` 读取。
+    gaps: false
+    folders: false                 # 是否同步书签文件夹归属
+    max_minutes: 30
+    delay_ms: 600
+    extra_args: []                 # 透传给上游的额外参数（谨慎使用）
+
+  auth:
+    # 实测结论（2026-09-16）：Chrome 155 的 Cookie 为 v20（App-Bound Encryption），上游 v1.3.22 无法解密；
+    # Firefox 156 的 cookies.sqlite 为明文，`sync --browser firefox` 已跑通（exit 0），因此以 firefox 为准。
+    # 优先级：firefox > cookies > oauth
+    method: "firefox"              # firefox | cookies | oauth
+    browser: "firefox"             # 传给上游 --browser
+    # 禁止把真实 cookies 写在此处；仅允许通过环境变量注入
+    cookies_env: "FT_SYNC_COOKIES"
+    oauth:
+      # 仅 method=oauth 时使用；凭证通过环境变量注入，不落盘
+      env_client_id: "X_CLIENT_ID"
+      env_client_secret: "X_CLIENT_SECRET"
+      callback_url: "http://127.0.0.1:3000/callback"
+
+# ── Ingest ───────────────────────────────────────────────────
+ingest:
+  dedupe_key: "tweet_id"           # 唯一标识
+  mark_failed_after_attempts: 3    # 超过次数后置 FAILED 并跳过，等待人工 retry
+  stop_after_consecutive_seen: 50  # 增量游标优化：连续 N 条已存在则提前结束
+  # 注意（2026-09-16 实测）：上游默认增量在连续 3 页无新增后即停止，
+  # 因此"首轮/补历史"必须用 sync --continue 或 --rebuild，不能依赖上面的提前结束阈值来判断全量。
+
+# ── Media ────────────────────────────────────────────────────
+media:
+  download: true
+  download_video: false            # 视频体积大，默认关闭（Phase 8 评审）
+  max_bytes: 20971520              # 单文件上限 20 MB
+  stable_naming: true              # 稳定命名，避免重复下载
+  assets_subdir: "assets"          # -> {YYYY}/{MM}/assets/{tweet_id}/
+
+# ── External links ───────────────────────────────────────────
+external:
+  enabled: true
+  timeout_seconds: 20
+  retries: 2
+  backoff_seconds: 3
+  max_links_per_tweet: 10
+  max_bytes: 5242880               # 单页最大抓取 5 MB
+  user_agent: "Mozilla/5.0 (compatible; XBookmarkKnowledgePipeline)"
+  # 每类站点可覆写（Phase 9 实现）
+  handlers: ["web", "github", "pdf"]
+
+# ── Markdown ─────────────────────────────────────────────────
+markdown:
+  filename_pattern: "{yyyymmdd}-{tweet_id}.md"
+  frontmatter: true
+  include_sections:
+    - tweet
+    - thread
+    - media
+    - article
+    - external_links
+    - metadata
+    - ai_analysis
+    - source
+  overwrite_existing: false        # 幂等：已存在且未变更则跳过
+
+# ── AI 增强（Phase 11，默认关闭）─────────────────────────────
+ai:
+  enabled: false
+  provider: "upstream-classify"    # upstream-classify | claude-cli | codex-cli
+  engine: "claude"
+  write_to: "frontmatter_and_section"   # 只允许追加 ai_* 字段与 ## AI Analysis
+  protected_fields:                # 这些字段 AI 绝对不可修改
+    - tweet_id
+    - tweet_text
+    - author
+    - created_at
+    - tweet_url
+    - source
+
+# ── 日志与报告 ───────────────────────────────────────────────
+logging:
+  level: "INFO"
+  file_per_day: true
+  console: true
+  report_on_sync: true             # 同步结束打印 Fetched/New/Skipped/Failed 等统计
+
+# ── 调度（Phase 13）──────────────────────────────────────────
+scheduler:
+  provider: "windows-task-scheduler"
+  task_name: "XBookmarkKnowledge-Sync"
+  daily_at: "08:00"
+  command: "python -m src.cli sync"
+  log_dir: "data/logs"
+
+# ── 测试与安全 ───────────────────────────────────────────────
+safety:
+  forbid_writes_outside_project: true
+  forbid_writes_to_upstream: true
+  mask_secrets_in_logs: true

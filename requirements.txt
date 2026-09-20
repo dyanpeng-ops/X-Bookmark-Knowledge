@@ -1,0 +1,13 @@
+# 运行时依赖
+#
+# PyYAML：解析 config/config.yaml（Phase 6 引入；理由见 CHANGELOG.md Phase 6 的 Decided 与 ADR-012）。
+# 数据层与采集层仍只使用 Python 标准库
+#   - sqlite3（含 FTS5，已在本机 Python 3.12.13 / SQLite 3.53.1 实测通过）
+#   - dataclasses / enum / contextlib / pathlib / datetime
+#
+# 说明（见 .clinerules/20-execution.md「避免不必要依赖」与 AGENTS.md 第 5 节）：
+# 新增第三方依赖必须在 CHANGELOG.md 写明理由。已知的将来候选：
+#   - YAML 解析（读取 config/config.yaml）→ 已决定：PyYAML（见文件头）
+#   - HTTP/HTML 正文抽取（外链抓取）    → 决定时间：Phase 9
+#
+pyyaml==6.0.3

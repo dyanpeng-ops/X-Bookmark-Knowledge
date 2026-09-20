@@ -1,0 +1,14 @@
+{
+  "provider": "twitter",
+  "lastRunAt": "2026-09-16T00:00:01.000Z",
+  "totalRuns": 2,
+  "totalAdded": 3,
+  "lastAdded": 3,
+  "lastSeenIds": [
+    "1900000000000000101",
+    "1900000000000000102",
+    "1900000000000000103"
+  ],
+  "stopReason": "end of bookmarks",
+  "lastCursor": "HBaayonR2YL/hzQAAA=="
+}

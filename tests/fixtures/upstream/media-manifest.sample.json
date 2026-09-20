@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-16T00:00:05.000Z",
+  "limit": 5,
+  "maxBytes": 209715200,
+  "processed": 2,
+  "downloaded": 2,
+  "skippedTooLarge": 0,
+  "failed": 0,
+  "entries": [
+    {
+      "bookmarkId": "1900000000000000101",
+      "tweetId": "1900000000000000101",
+      "tweetUrl": "https://x.com/sample_author/status/1900000000000000101",
+      "authorHandle": "sample_author",
+      "authorName": "Sample Author",
+      "sourceUrl": "https://pbs.twimg.com/media/SAMPLE0000000001.png",
+      "localPath": "C:\\synthetic\\data\\media\\SAMPLE0000000001.png",
+      "contentType": "image/png",
+      "bytes": 28243,
+      "status": "downloaded",
+      "fetchedAt": "2026-09-16T00:00:04.000Z"
+    },
+    {
+      "bookmarkId": "1900000000000000101",
+      "tweetId": "1900000000000000101",
+      "tweetUrl": "https://x.com/sample_author/status/1900000000000000101",
+      "authorHandle": "sample_author",
+      "authorName": "Sample Author",
+      "sourceUrl": "https://pbs.twimg.com/profile_images/0000000000000000001/sample_400x400.jpg",
+      "localPath": "C:\\synthetic\\data\\media\\sample_400x400.jpg",
+      "contentType": "image/jpeg",
+      "bytes": 18953,
+      "status": "downloaded",
+      "fetchedAt": "2026-09-16T00:00:04.500Z"
+    }
+  ]
+}
