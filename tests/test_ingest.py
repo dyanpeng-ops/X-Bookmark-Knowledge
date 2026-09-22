@@ -229,6 +229,29 @@ class LinkTests(IngestTestCase):
         self.assertEqual(self.repository.require_bookmark("1").status, "COLLECTED")
         self.assertEqual(self.repository.list_external_links("1"), [])
 
+    def test_reingest_does_not_reset_fetch_status(self):
+        """Phase 9 回归：重复 sync 不得把外链抓取结果重置回 PENDING。"""
+
+        url = "https://example.com/a"
+        bookmarks = [make_bookmark("1", links=(url,))]
+        self.ingestor.run(bookmarks)
+        self.repository.set_link_status(
+            "1",
+            url,
+            "FETCHED",
+            resolved_url="https://example.com/a",
+            title="Example",
+            content_path="assets/1/links/abc.md",
+        )
+
+        stats = self.ingestor.run(bookmarks)
+
+        self.assertEqual(stats.links_unchanged, 1)
+        record = self.repository.require_external_link("1", url)
+        self.assertEqual(record.fetch_status, "FETCHED")
+        self.assertEqual(record.content_path, "assets/1/links/abc.md")
+        self.assertEqual(record.title, "Example")
+
     def test_domain_of_handles_garbage(self):
         self.assertEqual(domain_of("not a url"), "")
         self.assertEqual(domain_of("https://a.b:8443/x"), "a.b:8443")

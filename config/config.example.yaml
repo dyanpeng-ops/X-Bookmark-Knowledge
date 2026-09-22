@@ -94,13 +94,25 @@ media:
 external:
   enabled: true
   timeout_seconds: 20
-  retries: 2
-  backoff_seconds: 3
-  max_links_per_tweet: 10
+  retries: 2                       # 额外重试次数（总尝试 = 1 + retries），仅对瞬时错误
+  backoff_seconds: 3               # 退避 = backoff * 第几次尝试
+  max_links_per_tweet: 10          # 超出部分记 SKIPPED（不累加 attempts）
   max_bytes: 5242880               # 单页最大抓取 5 MB
   user_agent: "Mozilla/5.0 (compatible; XBookmarkKnowledgePipeline)"
-  # 每类站点可覆写（Phase 9 实现）
-  handlers: ["web", "github", "pdf"]
+  delay_seconds: 1                 # 相邻抓取请求之间的礼貌间隔（0 = 不等待）
+  max_redirects: 5                 # 逐跳跟随重定向的上限
+  max_attempts: 3                  # FAILED 外链累计尝试次数上限；需 --force 才再试
+  # 命中这些域名（含子域）的链接记 SKIPPED：X 自身链接的正文已由富化 ## article 提供，
+  # 直接抓只会撞登录墙。写 [] 表示不跳过任何域名。
+  # 复审修复（2026-09-20）：拒绝抓取非公网目标（localhost / 私网 / 链路本地 / 云元数据
+  # 169.254.169.254），并在每一跳重定向后复核；allow_hosts 可显式放行（精确或子域）。
+  block_non_public_hosts: true
+  allow_hosts: []
+  skip_domains: ["x.com", "twitter.com"]
+  links_subdir: "links"            # -> {YYYY}/{MM}/assets/{tweet_id}/links/{link_key}.md
+  # 已实现的 handler（Phase 9）：web / github
+  # pdf 尚未实现：配置在这里只会收到 [warn] 提示，相关链接记 SKIPPED 并保留原始 URL
+  handlers: ["web", "github"]
 
 # ── Markdown ─────────────────────────────────────────────────
 markdown:

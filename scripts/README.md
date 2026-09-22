@@ -37,6 +37,9 @@
 .\.venv\Scripts\python.exe -m src.cli sync --skip-collect  # 只入库已有上游数据（离线）
 .\.venv\Scripts\python.exe -m src.cli media              # 上游媒体 -> 知识库 assets/（Phase 8 起）
 .\.venv\Scripts\python.exe -m src.cli media --dry-run    # 只解析并报告，不写文件、不写数据库
+.\.venv\Scripts\python.exe -m src.cli links              # 外链正文 -> assets/{tweet_id}/links/（Phase 9 起）
+.\.venv\Scripts\python.exe -m src.cli links --dry-run    # 只抓取并报告，不写文件、不写数据库
+.\.venv\Scripts\python.exe -m src.cli links --force      # 连已 FETCHED 的外链也重新抓取
 .\.venv\Scripts\python.exe -m src.cli process            # 由 data/raw/ 生成 Markdown（Phase 7 起）
 .\.venv\Scripts\python.exe -m src.cli process --overwrite # 内容变化时允许覆盖既有 Markdown（默认拒绝）
 .\.venv\Scripts\python.exe -m src.cli status --json      # 只读状态（机器可读）
@@ -45,7 +48,12 @@
 
 退出码约定：`0` 成功、`1` 业务失败（有条目入库/本地化/处理失败）、`2` 配置错误、`3` 上游失败。
 
-流水线顺序：`sync → media → process`（`process` 读取 `media` 写入的知识库内媒体路径）。
+流水线顺序：`sync → media → links → process`（`process` 读取 `media` / `links` 写入的知识库内路径）。
+
+外链幂等语义（Phase 9）：`FETCHED` 且正文文件仍在知识库内 → `unchanged`（**不联网**）；
+正文文件缺失或 `--force` → 重新抓取，内容未变仍不重写；失败 → 只该行 `FAILED`
+（`error_message` + `attempts`），**原始 URL 保留**；累计失败达 `external.max_attempts`
+（默认 3）后不再重试，需 `links --force`。
 
 媒体幂等语义（Phase 8）：目标文件已存在且 SHA-256 与上游源一致 → `unchanged`（不重写）；
 源内容变化 → 覆盖重写；源缺失 → 只该行 `FAILED`（`media.error_message` + `attempts`），其余照常。
@@ -58,5 +66,5 @@ Markdown 幂等语义（Phase 7）：内容未变 → 跳过；内容已变 → 
 
 ## 状态
 
-Phase 8 时点：本目录仅含本说明文件，脚本在 Phase 13 实现。
+Phase 9 时点：本目录仅含本说明文件，脚本在 Phase 13 实现。
 

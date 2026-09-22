@@ -2,7 +2,7 @@
 
 > 项目：X Bookmark Knowledge Pipeline
 > 项目根：`D:\Users\label-workplace\Agent-Eval\AI-Agent-Lab\01_Knowledge-Agent\projects\X-Bookmark-Knowledge\`
-> 最后更新：2026-09-17
+> 最后更新：2026-09-21（Phase 9 复审关闭；离线套件经批准全绿，真实数据写运行待批准）
 
 ---
 
@@ -10,11 +10,11 @@
 
 | 项 | 值 |
 | --- | --- |
-| 已完成 | Phase 0 – Phase 8（M1、M2、M3 达成） |
-| 当前阶段 | Phase 8 已完成（2026-09-20，真实数据验收通过）；下一步 **Phase 9（外部 URL 解析）** |
+| 已完成 | Phase 0 – Phase 8（M1、M2、M3 达成）；Phase 9 实现完毕、复审关闭，离线全量经批准通过；真实数据写运行待批准 |
+| 当前阶段 | **Phase 9：实现完毕 + 复审关闭（2026-09-21）**；待真实数据写运行（links / process / 二次 links / sync 回归） |
 | 技术路线 | `fieldtheory` CLI 作 Collector（Adapter 隔离）+ 其余自研（详见 `research/architecture-decision.md`） |
 | 当前阻塞 | 无（Phase 6 的上游缓存污染已收尾：`data/upstream` 现为 5 条真实记录 + 6 个媒体文件，无 `stub-argv.txt`） |
-| 最近验证 | ① `.venv\Scripts\python.exe -m unittest discover -s tests -t .` → **272 passed / exit 0**；② 真实数据 `media` 二次运行 `unchanged: 6 / copied: 0`，6/6 行 `local_path` 归一至知识库内且与上游副本哈希一致；③ 真实数据 `process --overwrite` → `written: 1 / unchanged: 4`，再跑 `written: 0 / unchanged: 5` |
+| 最近验证 | ①（2026-09-21，经批准）`.venv\Scripts\python.exe -m unittest discover -s tests -t .` → **369 passed / exit 0**（`tests/test_external.py` 94/94）；② `git diff --check` 干净；③ `links --dry-run`（真实数据）：attempted 5 / fetched 1 / skipped 4 / failed 0，不写盘（注意：dry-run 仍会联网）。Phase 8 的真实数据结论不变 |
 
 ---
 
@@ -31,7 +31,7 @@
 | 6 | 实现增量同步 | ✅ 完成（2026-09-16） | `src/config.py` + `src/ingest/` + `src/cli/`（sync/status/doctor）+ 60 用例；M2 达成 |
 | 7 | 实现 Markdown Generator | ✅ 完成（2026-09-17） | `src/markdown/`（render + writer）+ `process` 子命令 + `tests/test_markdown.py`（23 用例）；M3 达成 |
 | 8 | 媒体处理 | ✅ 完成（2026-09-20） | `src/media/`（localizer）+ `media` 子命令 + `tests/test_media.py`（44 用例）；6/6 真实媒体本地化并归一 `media.local_path` |
-| 9 | 外部 URL 解析 | ⛔ 未开始 | `src/external/` |
+| 9 | 外部 URL 解析 | ✅ 实现完毕 + 复审关闭（2026-09-21；真实数据写运行待批准） | `src/external/`（含 `netguard.py`）+ `links` 子命令 + `tests/test_external.py`（94 用例） |
 | 10 | 内容完整性测试（Test A–L） | ⛔ 未开始 | `tests/` + 抽样报告 |
 | 11 | AI Knowledge-Agent 接入 | ⛔ 未开始 | `src/processor/` 的 AI 段 |
 | 12 | 建立 Knowledge-Agent Pipeline | ⛔ 未开始 | 状态机流转 + inbox 交接 |
@@ -60,8 +60,9 @@
 | 状态存储 | SQLite（stdlib `sqlite3`） | ✅ 已定 |
 | 全文检索 | SQLite FTS5 | ✅ 已于 2026-09-15 以 Python 3.12.13 / SQLite 3.53.1 实测：建表与 `MATCH` 查询可用 |
 | 配置格式 | YAML（`config.yaml`），解析用 **PyYAML 6.0.3** | ✅ 已定（ADR-012，Phase 6 落地） |
-| HTTP | 标准库 `urllib` 优先；若需 HTTP/2 或更强重定向控制再评估 `httpx` | 待 Phase 9 决定 |
-| HTML 正文抽取 | 待 Phase 9 评估（标准库方案优先） | 待定 |
+| HTTP | **标准库 `urllib`**（注入式传输层，逐跳跟随重定向） | ✅ 已定（ADR-017，Phase 9） |
+| HTML 正文抽取 | **标准库 `html.parser`**（skip 标签 + 块级换行归一化） | ✅ 已定（ADR-017，Phase 9） |
+| SSRF 防护 | `src/external/netguard.py`（标准库 `ipaddress`；默认阻断非公网目标，重定向逐跳复核；`external.block_non_public_hosts` / `external.allow_hosts`） | ✅ 已定（Phase 9 复审，ADR-017 补充） |
 | AI 引擎 | 待 Phase 11 决定（`ft classify` vs 直接调 claude/codex CLI） | 待定 |
 | 调度 | Windows Task Scheduler（`schtasks`） | ✅ 已定 |
 | 测试 | stdlib `unittest`（**已决定**，2026-09-15） | ✅ 已定：零第三方依赖、与"依赖最小化"一致；唯一理由是 pytest 提供更好的断言/夹具，但当前不构成必要需求 |
@@ -319,7 +320,7 @@ sync --skip-collect: media rows : 0 new, 0 updated, 6 unchanged   ← 本地路�
 | M2（Phase 6） | `python -m src.cli sync` 可跑通并输出统计报告 | 连续执行两次，第二次 New=0、无重复 Markdown |
 | M3（Phase 7） | 逐条 Markdown 符合 frontmatter 规范并落到 `knowledge/X-Bookmarks/YYYY/MM/` | ✅ 达成（2026-09-17）：真实 5 条全部核对；`process` 二次运行 `written: 0 / unchanged: 5` |
 | Media（Phase 8） | 媒体本地化到知识库 `assets/` + `media.local_path` 归一 + Markdown 引用本地路径 | ✅ 达成（2026-09-20）：6/6 行指向知识库内且与上游副本 SHA-256 一致；`media` 二次运行 `copied: 0 / unchanged: 6`；`## media` 引用本地相对路径 |
-| M4（Phase 9） | 外链正文抽取可用，失败也保留原始 URL | 失败样例不丢 URL |
+| M4（Phase 9） | 外链正文抽取可用，失败也保留原始 URL | 部分达成（2026-09-21）：实现完毕 + 复审关闭，离线 369/369 经批准全绿；真实数据写运行待批准 |
 | M5（Phase 10） | Test A–L 全部通过 | 测试报告 |
 | M6（Phase 13） | 定时任务可安装/卸载/手工运行 | `schtasks /query` 可见任务 |
 

@@ -13,14 +13,15 @@ frontmatter and a no-overwrite guarantee (Phase 7). Status: COMPLETE (2026-09-17
 knowledge-local paths, and `## media` referencing them (Phase 8). Status: COMPLETE (2026-09-20,
 real data).**
 
-Immediate next phase: **Phase 9 — external link extraction.** Not started; needs authorization.
+Immediate next phase: **Phase 9 — external link extraction.** Implemented (2026-09-20), **awaiting
+user-approved verification** — see `tasks/CURRENT.md` for the pending-verification list.
 
 Phase 8 closed the audit precondition: the six stale C:-rooted `media.local_path` values were
 resolved by file name under the configured `data/upstream/media/`, copied into `assets/{tweet_id}/`,
 and rewritten in SQLite.
 
 Next milestone: **M4 — external link extraction usable, failures keep the original
-URL (Phase 9).**
+URL (Phase 9).** Implemented; acceptance run not yet authorized.
 
 ## Progress
 
@@ -64,20 +65,36 @@ Phase 8 → media localisation / audit precondition (complete, 2026-09-20):
 - [x] Real-data acceptance: `media` → `copied: 6 / failed: 0`, then `unchanged: 6 / copied: 0`;
       `process --overwrite` → `written: 1 / unchanged: 4`; `sync --skip-collect` keeps `local_path`
 
+Phase 9 → external links / M4 (implemented 2026-09-20, **awaiting user-approved verification**):
+
+- [x] `src/external/fetcher.py` — stdlib `urllib` fetch wrapper: timeout, retries with backoff,
+      hop-by-hop redirects (`max_redirects`), charset detection, `max_bytes` cap, injectable transport
+- [x] `src/external/handlers/` — `web` (`html.parser`) + `github`; `pdf` deferred (skipped with reason)
+- [x] `src/external/resolver.py` — `LinkResolver`: per-link isolation, knowledge-local content files,
+      `unchanged` without network, attempt cap (`external.max_attempts`, `--force` overrides)
+- [x] `ExternalOptions` + `load_external_options()`; `skip_domains` default `x.com`/`twitter.com`
+- [x] `links [--tweet-id] [--limit] [--force] [--dry-run]` subcommand; `status` reports link counts
+- [x] `## external_links` renders title/path/reason via `link_lookup`; Phase 7 shape unchanged
+      when no links have been fetched
+- [x] `ingest` writes `fetch_status` only on insert (regression test in `tests/test_ingest.py`)
+- [x] `tests/test_external.py` (offline; transport + CLI fetcher are fake-injected)
+- [ ] Acceptance run (see `tasks/CURRENT.md` — pending approval)
+
 ## Current Task
 
 See `tasks/CURRENT.md`.
 
 Phase 8 has been completed and accepted on real data (2026-09-20); all six `media.local_path`
 values hold knowledge-local paths and the media layer no longer reads the legacy C: cache.
-Phase 9 (external links) awaits user authorization.
+Phase 9 (external links) is implemented and awaiting user-approved verification.
 
 ## Dependencies
 
 - Phase 7 depends on the Phase 6 ingest output (rows in `bookmarks`, archives in `data/raw/`).
 - Phase 8 (media localisation) consumes the `media` rows written by the ingest layer and the
   `data/upstream/media/` cache; its output (`media.local_path`) is consumed by `process`.
-- Phase 9 (external links) will consume the `external_links` rows created by the ingest layer.
+- Phase 9 (external links) consumes the `external_links` rows created by the ingest layer and writes
+  content into `knowledge/.../assets/{tweet_id}/links/`.
 
 ## Definition of Done
 
@@ -116,6 +133,11 @@ Phase 8 — achieved (2026-09-20, real data):
   recorded) while the remaining rows are still localised.
 - Acceptance: `Ran 272 tests ... OK`, exit 0.
 
-M4 — not started:
+M4 — implemented (2026-09-20), awaiting acceptance:
 
 - External link extraction (Phase 9) usable; a failed fetch still keeps the original URL.
+- `links` is idempotent: the first run fetches and writes `assets/{tweet_id}/links/{link_key}.md`;
+  the second reports `unchanged` without network access.
+- `sync` re-runs never reset `fetch_status` (`0 new, 0 updated, N unchanged` on the link rows).
+- Acceptance: full offline suite green; real-data `links --dry-run` → `links` → `process` →
+  `links` (unchanged) → `sync --skip-collect` (no reset). All runs pending approval.

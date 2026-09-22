@@ -59,6 +59,17 @@ FRONTMATTER_KEYS: tuple[str, ...] = (
     "source",
 )
 
+#: `## external_links` 段落里显示的状态标签（Phase 9）；`PENDING` 不显示备注。
+_LINK_STATUS_LABELS: Mapping[str, str] = {"FAILED": "抓取失败", "SKIPPED": "已跳过"}
+
+
+@dataclass(frozen=True)
+class _SectionContext:
+    """渲染所需的、来自 Markdown 之外的产物（媒体本地化、外链正文）。"""
+
+    media_files: Mapping[str, str] | None = None
+    link_details: Mapping[str, Mapping[str, Any]] | None = None
+
 
 def _now_iso(now: Any = None) -> str:
     if now is None:
@@ -111,6 +122,21 @@ def _md_escape(text: str) -> str:
     value = str(text).replace("\r\n", "\n").replace("\r", "\n")
     # 先转义反斜杠再转义竖线，避免把 `|`→`\|` 再被误转成 `\\|`。
     return value.replace("\\", "\\\\").replace("|", "\\|")
+
+
+def _escape_link_text(text: str) -> str:
+    """链接文字的安全化：`[` / `]` 与换行会破坏 `[text](url)`，必须收敛。"""
+
+    value = str(text).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    return " ".join(value.split())
+
+
+def _note_text(status: str, note: str) -> str:
+    """去掉 `skipped: ` 前缀，避免渲染成"已跳过：skipped: xxx"。"""
+
+    if status == "SKIPPED" and note.lower().startswith("skipped:"):
+        return note.split(":", 1)[1].strip()
+    return note
 
 
 def _iso_created_at(upstream: Mapping[str, Any]) -> str | None:
@@ -257,15 +283,49 @@ def _render_section_article(enrichment: Mapping[str, Any] | None) -> str:
     return "\n\n".join(parts)
 
 
-def _render_section_external_links(upstream: Mapping[str, Any]) -> str:
+def _render_section_external_links(
+    upstream: Mapping[str, Any],
+    link_details: Mapping[str, Mapping[str, Any]] | None = None,
+) -> str:
+    """外链段落。
+
+    `link_details`：`{原始 URL: {title, resolved_url, content_path, fetch_status, error_message}}`
+    （Phase 9 外链层产物，`content_path` 已是相对本 Markdown 文件的路径）。
+    缺失该映射（或某条外链仍为 `PENDING`）时，输出与 Phase 7 完全一致的纯 URL 列表——
+    未跑 `links` 时 Markdown 不会凭空变化。
+    """
+
     links = [str(url) for url in (upstream.get("links") or ()) if str(url).strip()]
     if not links:
         return "_无外链_"
+    details = link_details or {}
     seen: list[str] = []
     for url in links:
         if url not in seen:
             seen.append(url)
-    return "\n".join(f"- {url}" for url in seen)
+
+    blocks: list[str] = []
+    for url in seen:
+        detail = details.get(url)
+        info: Mapping[str, Any] = detail if isinstance(detail, Mapping) else {}
+        title = str(info.get("title") or "").strip()
+        blocks.append(f"- [{_escape_link_text(title)}]({url})" if title else f"- {url}")
+
+        status = str(info.get("fetch_status") or "").strip().upper()
+        resolved = str(info.get("resolved_url") or "").strip()
+        content_path = str(info.get("content_path") or "").strip()
+        note = _note_text(status, str(info.get("error_message") or "").strip())
+
+        if resolved and resolved != url:
+            blocks.append(f"  - 最终地址：{resolved}")
+        if status == "FETCHED":
+            if content_path:
+                blocks.append(f"  - 正文：`{content_path}`")
+            if note:
+                blocks.append(f"  - 备注：{_md_escape(note)}")
+        elif status in _LINK_STATUS_LABELS and note:
+            blocks.append(f"  - {_LINK_STATUS_LABELS[status]}：{_md_escape(note)}")
+    return "\n".join(blocks)
 
 
 def _render_section_metadata(upstream: Mapping[str, Any], enrichment: Mapping[str, Any] | None) -> str:
@@ -326,14 +386,14 @@ def _render_section_source(upstream: Mapping[str, Any]) -> str:
 
 
 _SECTION_RENDERERS: dict[str, Any] = {
-    "tweet": lambda u, e, m: _render_section_tweet(u),
-    "thread": lambda u, e, m: _render_section_thread(e),
-    "media": lambda u, e, m: _render_section_media(u, m),
-    "article": lambda u, e, m: _render_section_article(e),
-    "external_links": lambda u, e, m: _render_section_external_links(u),
-    "metadata": lambda u, e, m: _render_section_metadata(u, e),
-    "ai_analysis": lambda u, e, m: _render_section_ai_analysis(),
-    "source": lambda u, e, m: _render_section_source(u),
+    "tweet": lambda u, e, c: _render_section_tweet(u),
+    "thread": lambda u, e, c: _render_section_thread(e),
+    "media": lambda u, e, c: _render_section_media(u, c.media_files),
+    "article": lambda u, e, c: _render_section_article(e),
+    "external_links": lambda u, e, c: _render_section_external_links(u, c.link_details),
+    "metadata": lambda u, e, c: _render_section_metadata(u, e),
+    "ai_analysis": lambda u, e, c: _render_section_ai_analysis(),
+    "source": lambda u, e, c: _render_section_source(u),
 }
 
 
@@ -343,13 +403,18 @@ def render_markdown(
     options: RenderOptions,
     *,
     media_files: Mapping[str, str] | None = None,
+    link_details: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> str:
     """渲染整份 Markdown 文本（含可选 frontmatter + 各段落）。
 
     `media_files` 为可选的 `{source_url: 相对本文件的路径}` 映射（Phase 8 媒体本地化），
     缺省时 `## media` 段落沿用远程 URL（Phase 7 行为完全不变）。
+
+    `link_details` 为可选的 `{原始 URL: {title, resolved_url, content_path, fetch_status,
+    error_message}}`（Phase 9 外链层），缺省时 `## external_links` 也保持 Phase 7 行为。
     """
 
+    context = _SectionContext(media_files=media_files, link_details=link_details)
     parts: list[str] = []
     if options.frontmatter:
         frontmatter = build_frontmatter(upstream, enrichment)
@@ -366,7 +431,7 @@ def render_markdown(
             logger.warning("unknown markdown section requested: %s", name)
             continue
         try:
-            body = renderer(upstream, enrichment, media_files)
+            body = renderer(upstream, enrichment, context)
         except Exception as exc:  # noqa: BLE001 - 单段失败不能丢弃整份
             logger.warning("section %r failed: %s", name, exc)
             body = f"_（段落 {name} 渲染失败）_"

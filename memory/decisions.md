@@ -493,6 +493,97 @@ that storing avatars matters, or Phase 12's handoff wants a relative (not absolu
 the database.
 
 
+Reconsider When:
+
+Upstream stops including `profile_image` entries in the manifest, the media set grows large enough
+that storing avatars matters, or Phase 12's handoff wants a relative (not absolute) `local_path` in
+the database.
+
+### ADR-017 — External links use the standard library only (`urllib` + `html.parser`); redirects are followed hop by hop; the transport is injectable
+
+Date: 2026-09-20
+
+Decision:
+
+Phase 9's fetch wrapper (`src/external/fetcher.py`) uses only the standard library:
+`urllib.request` with a `_NoRedirectHandler` so that 3xx responses surface to the wrapper, which
+follows them hop by hop (recording the chain, applying `max_redirects`, resolving relative
+`Location` with `urljoin`, rejecting non-http(s) hops). Content extraction (`src/external/handlers/`)
+parses HTML with `html.parser`. The transport is a callable injected into `HttpFetcher`, so every
+test is offline; `urllib` never runs inside the test suite. Requests carry
+`Accept-Encoding: identity` because the standard library does not decompress.
+
+Reason:
+
+The project rule is "minimal dependencies" (AGENTS.md §5) and the pending PLAN.md entry already
+preferred stdlib `urllib`. Redirects must be visible (they decide `resolved_url`, which the
+knowledge base shows for auditing) — letting `urllib` follow them silently would lose the chain
+and the hop limit. HTML extraction needs "title + description + readable body", not full
+readability scoring; `html.parser` with a skip-tag list is deterministic, fast, and testable.
+
+Alternatives:
+
+`httpx`/`requests` for fetching; `trafilatura`/`readability`/`beautifulsoup4` for extraction;
+letting `urllib` follow redirects by default; storing partial bodies when the size cap is exceeded.
+
+Rejected Because:
+
+Every HTTP/HTML dependency adds a version to pin for a workload of ~1 page per bookmarked link.
+Auto-redirects hide the final URL and the hop count from the database. Partial HTML bodies produce
+misleading "extracted content", so an over-size page fails cleanly with the original URL retained.
+A PDF handler was considered for Phase 9 but deferred: stdlib cannot parse PDFs, so `pdf` links are
+recorded as `SKIPPED` (reason stored, URL retained) until Phase 10 evaluates a real dependency.
+
+Reconsider When:
+
+A real bookmark sample needs HTTP/2, JS rendering, or readability-quality extraction — then the
+dependency decision must be recorded in CHANGELOG.md with the sample evidence.
+
+### ADR-018 — Link content lives in `assets/{tweet_id}/links/{link_key}.md`; `fetch_status` is written by ingest only on insert; FAILED rows stop retrying at `external.max_attempts`
+
+Date: 2026-09-20
+
+Decision:
+
+1. Extracted link content is written to
+   `knowledge/X-Bookmarks/{YYYY}/{MM}/assets/{tweet_id}/links/{link_key}.md` with
+   `link_key = sha1(url)[:16]` — the same naming contract as media keys. The file carries a
+   timestamp-free frontmatter (`source_url` / `resolved_url` / `title` / `description` / `domain`
+   / `handler`) plus the body, so re-fetching an unchanged page rewrites nothing.
+2. The ingest layer writes `external_links.fetch_status = PENDING` only when it **inserts** the
+   row (the same rule Phase 8 introduced for `media.local_path`). A repeated `sync` therefore never
+   resets `FETCHED`/`FAILED`/`SKIPPED` back to `PENDING`.
+3. A `FETCHED` row whose content file still exists inside the knowledge tree is reported
+   `unchanged` **without touching the network**; `links --force` re-fetches. `FAILED` rows are
+   retried until `external.max_attempts` (default 3), then reported skipped until `--force`.
+4. `x.com`/`twitter.com` are in the default `external.skip_domains`: their article bodies already
+   come from enrichment (`## article`), and direct fetches hit a login wall.
+
+Reason:
+
+Idempotency must survive every command in the pipeline. Ingest re-runs on every `sync`, so a
+status reset there would undo all fetch work — the same defect class as Phase 6's hard-coded
+`changed = True`. Not re-fetching completed links keeps `links` a no-network operation on the
+second run, which is the project's core acceptance criterion applied to the network layer. A
+bounded retry count prevents permanently dead links from burning attempts on every run.
+
+Alternatives:
+
+Inline extracted text into the tweet's Markdown; store extracted content in `data/`; retry FAILED
+forever; fetch X article links directly instead of relying on enrichment.
+
+Rejected Because:
+
+Inlining makes per-tweet files rewrite on every upstream page change and breaks the "one tweet =
+one file" shape; `data/` is program data, not the knowledge base (red line in AGENTS.md §3);
+unbounded retries are wasted traffic; X fetches fail by design (login wall).
+
+Reconsider When:
+
+Phase 12's handoff requires the extracted content next to the tweet file, or a policy decision
+changes how often the pipeline should re-fetch refreshed pages.
+
+
 ### ADR-XXX — Title
 
 Date: YYYY-MM-DD

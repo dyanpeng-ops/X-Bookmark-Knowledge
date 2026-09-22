@@ -19,11 +19,18 @@ Items waiting on a future Phase, a user decision, or new data samples. Ordered b
 - Noted for Phase 12: `media.local_path` is an absolute path; the inbox handoff may want a
   knowledge-relative form (ADR-016, "Reconsider When").
 
-## Phase 9 — external link extraction
+## Phase 9 — external link extraction (implemented 2026-09-20, **not verified**)
 
-- `src/external/` fetch wrapper (timeout / retry / redirect / encoding) + web / github / pdf handlers
-  per `config.yaml`.
+- `src/external/` fetch wrapper (timeout / retry / redirect / encoding) + `web` / `github` handlers.
 - A failed fetch must keep the original URL in the Markdown and in `external_links`.
+- **Review blockers to fix before acceptance** (see `tasks/CURRENT.md` → "Pending fixes — Phase 9 review"):
+  1. SSRF guard: reject `localhost` / private / link-local / cloud-metadata targets, and re-check after
+     every redirect hop (a malicious bookmark link must never pull internal content into the knowledge
+     base).
+  2. Canonical URL parsed by the `web` handler must actually reach the persisted row / link body.
+  3. Forced-refetch failure must be able to clear stale `content_path` / title / resolved URL
+     (needs an explicit "clear" capability in `set_link_status()`, keeping ADR-004 semantics).
+- Lint nit: trailing blank lines in `src/external/__init__.py` and `src/external/handlers/__init__.py`.
 
 ## Phase 10 — integrity tests (Test A–L)
 

@@ -32,9 +32,11 @@ __all__ = [
     "IngestConfig",
     "LoggingConfig",
     "MediaOptions",
+    "ExternalOptions",
     "PathsConfig",
     "AppConfig",
     "load_media_options",
+    "load_external_options",
     "default_project_root",
     "load_config",
     "resolve_path",
@@ -102,6 +104,14 @@ def _as_int(value: Any, field_name: str, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigError(f"{field_name} must be an integer, got {type(value).__name__}")
     return value
+
+
+def _as_float(value: Any, field_name: str, default: float) -> float:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"{field_name} must be a number, got {type(value).__name__}")
+    return float(value)
 
 
 def _as_str(value: Any, field_name: str, default: str | None = None) -> str | None:
@@ -209,6 +219,47 @@ class MediaOptions:
     max_bytes: int = DEFAULT_MAX_MEDIA_BYTES
     stable_naming: bool = True
     assets_subdir: str = "assets"
+
+
+DEFAULT_MAX_EXTERNAL_BYTES = 5 * 1024 * 1024  # 5 MB，与 config.example.yaml 保持一致
+DEFAULT_EXTERNAL_TIMEOUT_SECONDS = 20.0
+DEFAULT_EXTERNAL_BACKOFF_SECONDS = 3.0
+DEFAULT_EXTERNAL_DELAY_SECONDS = 1.0
+DEFAULT_EXTERNAL_MAX_REDIRECTS = 5
+DEFAULT_EXTERNAL_MAX_ATTEMPTS = 3
+
+#: 本阶段已实现的 handler（`external.handlers` 里其余名字只提示、不启用）。
+IMPLEMENTED_EXTERNAL_HANDLERS: tuple[str, ...] = ("web", "github")
+
+#: 默认跳过的域名：X 自身的链接，正文已由富化 `## article` 提供，抓取只会撞登录墙。
+DEFAULT_EXTERNAL_SKIP_DOMAINS: tuple[str, ...] = ("x.com", "twitter.com")
+
+
+@dataclass(frozen=True)
+class ExternalOptions:
+    """`external` —— 外链抓取选项（Phase 9）。
+
+    与 `media` 一样，本段不进 ``AppConfig`` 的强类型字段，由 CLI 层在需要时用
+    :func:`load_external_options` 从原始段构造。
+    """
+
+    enabled: bool = True
+    timeout_seconds: float = DEFAULT_EXTERNAL_TIMEOUT_SECONDS
+    retries: int = 2
+    backoff_seconds: float = DEFAULT_EXTERNAL_BACKOFF_SECONDS
+    max_links_per_tweet: int = 10
+    max_bytes: int = DEFAULT_MAX_EXTERNAL_BYTES
+    user_agent: str = "Mozilla/5.0 (compatible; XBookmarkKnowledgePipeline)"
+    handlers: tuple[str, ...] = IMPLEMENTED_EXTERNAL_HANDLERS
+    max_redirects: int = DEFAULT_EXTERNAL_MAX_REDIRECTS
+    max_attempts: int = DEFAULT_EXTERNAL_MAX_ATTEMPTS
+    delay_seconds: float = DEFAULT_EXTERNAL_DELAY_SECONDS
+    skip_domains: tuple[str, ...] = DEFAULT_EXTERNAL_SKIP_DOMAINS
+    links_subdir: str = "links"
+    #: 拒绝抓取非公网目标（localhost / 私网 / 链路本地 / 云元数据）；复审修复，默认开。
+    block_non_public_hosts: bool = True
+    #: 允许抓取的主机白名单（精确或子域，如 `example.org`）；优先级高于上面的开关。
+    allow_hosts: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -324,6 +375,69 @@ def load_media_options(section: Mapping[str, Any] | None) -> MediaOptions:
         max_bytes=_as_int(data.get("max_bytes"), "media.max_bytes", DEFAULT_MAX_MEDIA_BYTES),
         stable_naming=_as_bool(data.get("stable_naming"), "media.stable_naming", True),
         assets_subdir=_as_str(data.get("assets_subdir"), "media.assets_subdir", "assets") or "assets",
+    )
+
+
+def load_external_options(section: Mapping[str, Any] | None) -> ExternalOptions:
+    """把原始 `external` 段构造为强类型选项（Phase 9）。
+
+    与 :func:`load_media_options` 同一约定：缺失键取默认值，类型非法抛 ``ConfigError``。
+    ``handlers`` 只做字符串列表校验；"配置了尚未实现的名字"由调用方提示（不在这里报错，
+    否则本机旧配置会直接让 `links` 无法运行）。
+    """
+
+    data = section if isinstance(section, Mapping) else {}
+    # 注意：`skip_domains` 必须区分"键不存在"（用默认跳过名单）与"显式写 []"（不跳过任何域名），
+    # 因此不能走 `_as_str_tuple(x) or 默认值` 的写法。
+    skip_raw = data.get("skip_domains")
+    skip_domains = (
+        DEFAULT_EXTERNAL_SKIP_DOMAINS
+        if skip_raw is None
+        else _as_str_tuple(skip_raw, "external.skip_domains")
+    )
+    return ExternalOptions(
+        enabled=_as_bool(data.get("enabled"), "external.enabled", True),
+        timeout_seconds=_as_float(
+            data.get("timeout_seconds"),
+            "external.timeout_seconds",
+            DEFAULT_EXTERNAL_TIMEOUT_SECONDS,
+        ),
+        retries=_as_int(data.get("retries"), "external.retries", 2),
+        backoff_seconds=_as_float(
+            data.get("backoff_seconds"),
+            "external.backoff_seconds",
+            DEFAULT_EXTERNAL_BACKOFF_SECONDS,
+        ),
+        max_links_per_tweet=_as_int(
+            data.get("max_links_per_tweet"), "external.max_links_per_tweet", 10
+        ),
+        max_bytes=_as_int(
+            data.get("max_bytes"), "external.max_bytes", DEFAULT_MAX_EXTERNAL_BYTES
+        ),
+        user_agent=_as_str(
+            data.get("user_agent"),
+            "external.user_agent",
+            ExternalOptions().user_agent,
+        )
+        or ExternalOptions().user_agent,
+        handlers=_as_str_tuple(data.get("handlers"), "external.handlers")
+        or IMPLEMENTED_EXTERNAL_HANDLERS,
+        max_redirects=_as_int(
+            data.get("max_redirects"), "external.max_redirects", DEFAULT_EXTERNAL_MAX_REDIRECTS
+        ),
+        max_attempts=_as_int(
+            data.get("max_attempts"), "external.max_attempts", DEFAULT_EXTERNAL_MAX_ATTEMPTS
+        ),
+        delay_seconds=_as_float(
+            data.get("delay_seconds"), "external.delay_seconds", DEFAULT_EXTERNAL_DELAY_SECONDS
+        ),
+        skip_domains=skip_domains,
+        links_subdir=_as_str(data.get("links_subdir"), "external.links_subdir", "links")
+        or "links",
+        block_non_public_hosts=_as_bool(
+            data.get("block_non_public_hosts"), "external.block_non_public_hosts", True
+        ),
+        allow_hosts=_as_str_tuple(data.get("allow_hosts"), "external.allow_hosts"),
     )
 
 

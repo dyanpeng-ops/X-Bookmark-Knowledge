@@ -293,3 +293,48 @@ What should be done differently next time.
 Evidence:
 
 Relevant files, tests, or observations.
+
+### 2026-09-21 - a dry-run flag can suppress writes while still using the network
+
+Problem:
+
+`links --dry-run` was listed in a pending-verification list as an offline check; the approved run
+made one real outbound HTTP request. The flag only suppresses file/DB writes.
+
+Cause:
+
+The description was written from the flag name, not from the code path: the resolver calls the
+fetcher before any persistence branch, so dry-run cannot refuse network use.
+
+Lesson:
+
+Before a command goes on an approval list, read the code path and state side effects from code,
+not from the flag name: does it touch the network, the disk, the DB, credentials?
+
+Evidence:
+
+`src/external/resolver.py` (no dry-run guard before the fetcher call); approved run 2026-09-21
+(`fetched : 1`, nothing written); correction logged in `tasks/CURRENT.md` and README.
+
+### 2026-09-21 - not verified means even the import may be broken
+
+Problem:
+
+Phase 9 was delivered implemented-not-verified; its first-ever test run failed at package import
+(the handlers base module used the wrong relative import), and the run then surfaced two further
+NameErrors that static reading had missed.
+
+Cause:
+
+Nothing between implementation and acceptance executed the package; each module looked correct
+in isolation.
+
+Lesson:
+
+Treat an unverified package as unknown until executed: run the suite (after approval) before
+claiming completeness, and never infer the health of untested code from tested neighbours.
+
+Evidence:
+
+`Ran 369 tests ... OK` on 2026-09-21 after fixing the handlers base import, the missing
+`ALL_LINK_STATUS_VALUES` import in the repository, and a stray guard-clause reference.

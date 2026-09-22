@@ -5,10 +5,12 @@
 * `sync`    —— 可选调用上游采集，然后幂等入库并打印报告（M2 的验收入口）
 * `process` —— 逐条渲染 Markdown 到知识库 `YYYY/MM/`（Phase 7）
 * `media`   —— 把上游媒体缓存本地化到知识库 `assets/{tweet_id}/` 并回写 `media.local_path`（Phase 8）
+* `links`   —— 抓取外链正文到 `assets/{tweet_id}/links/` 并回写 `external_links`（Phase 9）
 * `status`  —— 只读展示配置、状态库与上游数据现状
 * `doctor`  —— 环境自检（配置 / 上游可执行 / 上游数据 / 数据库 schema / 日志目录）
 
-流水线顺序：`sync` → `media` → `process`（`process` 会读取 `media` 写入的本地路径）。
+流水线顺序：`sync` → `media` → `links` → `process`（`process` 会读取 `media` 与 `links`
+写入的知识库内路径）。
 
 约定
 ----
@@ -28,7 +30,7 @@ from typing import Any, Mapping, Sequence
 
 from src.collector import FieldTheoryAdapter
 from src.collector.base import CollectorError, MediaEntry, UpstreamBookmark
-from src.config import AppConfig, ConfigError, load_config
+from src.config import AppConfig, ConfigError, ExternalOptions, load_config
 from src.database import (
     BookmarkRecord,
     BookmarkRepository,
@@ -84,6 +86,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="只解析并报告将要复制的内容，不写文件、不写数据库",
     )
 
+    links = sub.add_parser("links", help="抓取外链正文到知识库 assets/<tweet_id>/links/（Phase 9）")
+    links.add_argument("--tweet-id", help="只处理指定 tweet_id")
+    links.add_argument("--limit", type=int, help="只处理前 N 条外链（演练用）")
+    links.add_argument("--force", action="store_true", help="连已 FETCHED 的外链也重新抓取")
+    links.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只抓取并报告结果，不写文件、不写数据库",
+    )
+
     status = sub.add_parser("status", help="只读状态展示")
     status.add_argument("--json", action="store_true", help="以 JSON 输出")
 
@@ -113,6 +125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "sync": _cmd_sync,
             "process": _cmd_process,
             "media": _cmd_media,
+            "links": _cmd_links,
             "status": _cmd_status,
             "doctor": _cmd_doctor,
         }
@@ -288,6 +301,8 @@ def _cmd_process(args: argparse.Namespace, config: AppConfig) -> int:
     # Phase 8：只把"位于知识库内且真实存在"的媒体路径交给渲染层，
     # 旧缓存路径（如 C:\...\.fieldtheory\...）与缺失文件一律回退远程 URL。
     media_paths = _local_media_paths(config, tweet_ids)
+    # Phase 9：同理，只有知识库内的外链正文才会被 `## external_links` 引用。
+    link_details = _local_link_details(config, tweet_ids)
 
     writer = MarkdownWriter(
         knowledge_dir,
@@ -295,12 +310,14 @@ def _cmd_process(args: argparse.Namespace, config: AppConfig) -> int:
         options=options,
         status_updater=None if args.no_status else status_updater,
         media_lookup=media_paths.get,
+        link_lookup=link_details.get,
     )
     stats = writer.run(tweet_ids)
 
     print("Markdown report")
     print(f"  knowledge dir : {knowledge_dir}")
     print(f"  local media   : {len(media_paths)} bookmark(s)")
+    print(f"  links known   : {len(link_details)} bookmark(s)")
     print(f"  attempted     : {stats.attempted}")
     print(f"  written       : {stats.written}")
     print(f"  unchanged     : {stats.unchanged}")
@@ -421,6 +438,163 @@ def _cmd_media(args: argparse.Namespace, config: AppConfig) -> int:
         print("  dry run       : true (no file or database change)")
     print(f"  attempted     : {stats.attempted}")
     print(f"  copied        : {stats.copied}")
+    print(f"  unchanged     : {stats.unchanged}")
+    print(f"  skipped       : {stats.skipped}")
+    print(f"  failed        : {stats.failed}")
+    for label, message in stats.errors[:5]:
+        print(f"[fail] {label}: {message}", file=sys.stderr)
+    return EXIT_OK if stats.ok else EXIT_FAILURE
+
+
+def _local_link_details(
+    config: AppConfig, tweet_ids: Sequence[str]
+) -> dict[str, dict[str, dict[str, object]]]:
+    """`{tweet_id: {url: 详情}}`，供 `process` 渲染 `## external_links`（Phase 9）。
+
+    只接受"位于知识库内且真实存在"的 `content_path`：路径缺失或越界时只保留状态与标题，
+    Markdown 里不会引用知识库之外的文件（与 Phase 8 媒体路径同一原则）。
+    `PENDING` 行也照常返回——渲染层会把它们显示成 Phase 7 的纯 URL 列表。
+    """
+
+    knowledge_root = config.paths.knowledge_dir.resolve()
+    found: dict[str, dict[str, dict[str, object]]] = {}
+    connection = connect(config.paths.state_db_path)
+    try:
+        repository = BookmarkRepository(connection)
+        for tweet_id in tweet_ids:
+            details: dict[str, dict[str, object]] = {}
+            for link in repository.list_external_links(tweet_id):
+                detail: dict[str, object] = {
+                    "title": link.title,
+                    "resolved_url": link.resolved_url,
+                    "fetch_status": link.fetch_status,
+                    "error_message": link.error_message,
+                }
+                if link.content_path:
+                    candidate = Path(link.content_path)
+                    if candidate.is_file():
+                        try:
+                            detail["content_path"] = candidate.resolve().relative_to(
+                                knowledge_root
+                            ).as_posix()
+                        except ValueError:
+                            pass  # 知识库之外：不引用
+                details[link.url] = detail
+            if details:
+                found[tweet_id] = details
+    finally:
+        connection.close()
+    return found
+
+
+def _build_link_fetcher(config: AppConfig, options: ExternalOptions) -> Any:
+    """构造外链抓取器（单独一层便于测试注入 fake transport）。"""
+
+    from src.external import HttpFetcher
+
+    return HttpFetcher(
+        timeout_seconds=options.timeout_seconds,
+        retries=options.retries,
+        backoff_seconds=options.backoff_seconds,
+        max_bytes=options.max_bytes,
+        max_redirects=options.max_redirects,
+        user_agent=options.user_agent,
+        block_non_public_hosts=options.block_non_public_hosts,
+        allow_hosts=options.allow_hosts,
+    )
+
+
+def _cmd_links(args: argparse.Namespace, config: AppConfig) -> int:
+    """抓取外链正文到知识库 `assets/{tweet_id}/links/` 并回写 `external_links`（Phase 9）。"""
+
+    from src.config import load_external_options
+    from src.external import LinkResolver, LinkTarget, build_handlers
+
+    options = load_external_options(config.section("external"))
+    if not options.enabled:
+        print(
+            "[warn] external.enabled=false; external link resolution is disabled by configuration",
+            file=sys.stderr,
+        )
+        return EXIT_OK
+
+    handlers, unimplemented = build_handlers(options.handlers)
+    if unimplemented:
+        print(
+            f"[warn] external.handlers: not implemented yet, ignored: {', '.join(unimplemented)}",
+            file=sys.stderr,
+        )
+
+    connection = connect(config.paths.state_db_path)
+    try:
+        repository = BookmarkRepository(connection)
+        if args.tweet_id:
+            record = repository.get_bookmark(args.tweet_id)
+            bookmarks = [record] if record is not None else []
+        else:
+            bookmarks = repository.list_bookmarks()
+        targets = [
+            LinkTarget(
+                tweet_id=bookmark.tweet_id,
+                url=link.url,
+                domain=link.domain,
+                created_at=bookmark.created_at,
+                fetch_status=link.fetch_status,
+                content_path=link.content_path,
+                attempts=link.attempts,
+                title=link.title,
+            )
+            for bookmark in bookmarks
+            for link in repository.list_external_links(bookmark.tweet_id)
+        ]
+    finally:
+        connection.close()
+
+    if args.limit is not None and args.limit >= 0:
+        targets = targets[: args.limit]
+    if not targets:
+        print(f"[warn] no external links to resolve at {config.paths.state_db_path}", file=sys.stderr)
+        return EXIT_OK
+
+    def updater(update: Any) -> None:
+        """逐条落库；与 `media` 一致，每条自开连接（避免长事务锁住状态库）。"""
+
+        conn = connect(config.paths.state_db_path)
+        try:
+            BookmarkRepository(conn).set_link_status(
+                update.tweet_id,
+                update.url,
+                update.status,
+                resolved_url=update.resolved_url,
+                title=update.title,
+                content_path=update.content_path,
+                error_message=update.error_message,
+                count_attempt=update.count_attempt,
+                clear_fields=update.clear_fields,
+            )
+        finally:
+            conn.close()
+
+    resolver = LinkResolver(
+        config.paths.knowledge_dir,
+        options=options,
+        fetcher=_build_link_fetcher(config, options),
+        handlers=handlers,
+        updater=None if args.dry_run else updater,
+        dry_run=bool(args.dry_run),
+        force=bool(args.force),
+    )
+    stats = resolver.run(targets)
+
+    print("Link report")
+    print(f"  knowledge dir : {config.paths.knowledge_dir}")
+    print(f"  handlers      : {', '.join(sorted(handlers)) or 'none'}")
+    if args.dry_run:
+        print("  dry run       : true (no file or database change)")
+    if args.force:
+        print("  force         : true (already fetched links are refetched)")
+    print(f"  attempted     : {stats.attempted}")
+    print(f"  fetched       : {stats.fetched}")
     print(f"  unchanged     : {stats.unchanged}")
     print(f"  skipped       : {stats.skipped}")
     print(f"  failed        : {stats.failed}")
@@ -595,6 +769,10 @@ def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
                 "schema": schema_status(connection),
                 "counts": repository.count_by_status(),
                 "total": repository.count_bookmarks(),
+                "links": {
+                    "counts": repository.count_external_links_by_status(),
+                    "total": repository.count_external_links(),
+                },
                 "last_synced_at": _max_last_synced_at(connection),
             },
             "upstream": {
@@ -640,7 +818,11 @@ def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
         f"(expected v{db['schema']['expected_version']})"
     )
     print(f"  db total      : {db['total']}")
-    print("  db counts     : " + " | ".join(f"{k} {v}" for k, v in sorted(db["counts"].items())))
+    print(f"  db counts     : " + " | ".join(f"{k} {v}" for k, v in sorted(db["counts"].items())))
+    links = db.get("links") or {"counts": {}, "total": 0}
+    print(f"  db links      : {links['total']} total | " + " | ".join(
+        f"{k} {v}" for k, v in sorted(links["counts"].items())
+    ))
     print(f"  last synced   : {db['last_synced_at'] or '-'}")
     up = payload["upstream"]
     print(f"  upstream cmd  : {' '.join(up['executable'])}")

@@ -9,6 +9,86 @@
 
 ---
 
+## [Phase 9] 2026-09-20 — External Link Extraction（实现完毕，**待验收**）
+
+> 状态：**实现完毕、未验收**。待验证清单见 `tasks/CURRENT.md`，未获批准前不得执行。
+
+### Added
+
+- `src/external/fetcher.py` — `HttpFetcher`：标准库 `urllib`，超时 / 重试 / 退避 / 逐跳重定向 /
+  `Content-Length` 与读取上限 / BOM + `<meta charset>` 编码探测；传输层可注入（测试全离线，ADR-017）
+- `src/external/handlers/` — `base`（`ContentHandler` / `select_handler`）、`web`（`html.parser`：
+  标题 / 摘要 / canonical / 正文，skip 标签列表）、`github`（`owner/repo` 标题策略）；`pdf` 暂未实现
+- `src/external/resolver.py` — `LinkResolver`：逐条隔离、写入
+  `assets/{tweet_id}/links/{link_key}.md`（无时间戳 → 内容幂等）、`FETCHED` 且正文仍在知识库内时
+  不联网、`FAILED` 在 `external.max_attempts`（默认 3）后停止重试（`--force` 强制）
+- `src/config.py` — `ExternalOptions` + `load_external_options()`；新增键 `delay_seconds` /
+  `max_redirects` / `max_attempts` / `skip_domains`（默认 `x.com` / `twitter.com`）/ `links_subdir`
+- `src/cli/main.py` — `links [--tweet-id] [--limit] [--force] [--dry-run]` 子命令；
+  `status` 报告外链状态计数；流水线顺序 `sync → media → links → process`
+- `tests/test_external.py` — 抓取封装 / handler / resolver / CLI 端到端（注入 fake transport，全程无 socket）
+
+### Changed
+
+- `src/database/repository.py` — `set_link_status()` 新增 `title`；新增
+  `count_external_links()` / `count_external_links_by_status()` / `list_links_by_status()`
+- `src/ingest/ingest.py` — `external_links.fetch_status` 只在**首次插入**时写入 `PENDING`（同
+  Phase 8 的 `media.local_path` 规则；回归测试在 `tests/test_ingest.py`）
+- `src/markdown/render.py` — `## external_links` 支持富化（`[title](url)` + 正文相对路径 /
+  最终地址 / 失败原因）；无富化信息时与 Phase 7 完全一致
+- `src/markdown/writer.py` — `MarkdownWriter` 支持 `link_lookup`，把知识库内的 `content_path`
+  换算为相对本文件的 POSIX 路径
+- `config/config.example.yaml` — `external` 段补充新键与说明（`pdf` 处理器标注为未实现）
+- `README.md` / `ARCHITECTURE.md` / `PLAN.md` / `memory/` / `tasks/CURRENT.md` — Phase 9 状态与命令
+
+### Fixed
+
+- Phase 9 前置缺陷（同 Phase 6 缺陷 #1 同族）：重复 `sync` 会把外链的 `fetch_status` 重置为
+  `PENDING`，导致已抓取的行每轮同步倒退。修复：ingest 仅在插入时写入 `fetch_status`。
+
+---
+
+## [Review] 2026-09-21 — Phase 9 复审阻断项关闭（实现修复 + 经批准的离线验证）
+
+> 状态：复审三项阻断 + lint 全部关闭；`tests.test_external` 94/94 OK，全量 369/369 OK
+> （2026-09-21 经批准运行，exit 0）；`git diff --check` 干净。**真实数据写运行仍待批准**。
+
+### Added
+
+- `src/external/netguard.py` — 非公网目标判定（回环 / 私网 / 链路本地（含 `169.254.169.254`）/
+  CGNAT / 组播 / 保留段 / IPv6 ULA；IPv4-mapped 归一）；`host_resolver` 可注入（测试不触 DNS）
+- `HttpFetcher` 新增 `BlockedTargetError`；初始目标与每一跳重定向后都复核；策略拒绝不重试
+- 配置：`external.block_non_public_hosts`（默认 true）、`external.allow_hosts`（默认 []）
+- `tests/test_external.py` 新增 `ReviewFixTests` 8 用例（SSRF、重定向复核、canonical 端到端、
+  失败清字段三态、仓储 `clear_fields` 非法字段名）
+
+### Fixed
+
+- 复审阻断 1（SSRF）：`netguard` + 逐跳复核；命中在 resolver 中按策略跳过处理（记原因、不计
+  attempt、不联网），满足敏感信息不进 Markdown 的红线
+- 复审阻断 2（canonical）：`canonical_url` 优先写入 `external_links.resolved_url`（回退重定向
+  最终址）；正文 frontmatter 同时记录 resolved 与 canonical 两个 URL
+- 复审阻断 3（失败留旧正文）：`LinkUpdate.clear_fields` + `set_link_status(..., clear_fields=...)`
+  （`None` 仍表示未提供，ADR-004 不变）；`--force` 失败或 attempts 耗尽时清空
+  `content_path` / `title` / `resolved_url`，普通瞬时失败保留上次成功正文
+- lint：两处 `__init__.py` 文件末尾空行清除；`git diff --check` 干净
+- 新暴露缺陷：`handlers/base.py` 相对导入写错导致 `src.external` 整包不可导入；`repository.py`
+  引用 `ALL_LINK_STATUS_VALUES` 未导入；`fetcher._guard` 残留 `attempts_total` 死代码
+- CLI 标签 `local links` 更名 `links known`（该计数含 PENDING，原名误导；同步改两处测试）
+
+### Decided
+
+- SSRF 命中记为策略跳过而非 `FAILED`（不计 attempt、不重试、原因入库）。
+- 普通瞬时失败保留旧正文；仅在强制重抓失败或重试耗尽时清空。
+- 修正记录：`links --dry-run` 并非离线 - 只抑制写盘/写库，仍会发起真实 HTTP；已同步更正
+  `tasks/CURRENT.md` 与 README。真实数据写运行（`links` / `process` / 二次 `links` /
+  `sync --skip-collect`）改为单独审批项。
+
+### Notes
+
+- 全部改动未提交；提交与推送另行征求批准。
+
+
 ## [Process] 2026-09-20 — 验证分级授权（用户指令）
 
 ### Decided

@@ -18,6 +18,7 @@
 | `test_cli.py` | 端到端：`sync`/`status`/`doctor`、**M2 的 New=0 断言**、退出码 0/1/2/3、失败记录写入 | ✅ Phase 6（17 用例） |
 | `test_markdown.py` | 渲染（frontmatter 键序、8 段落、占位、转义）、路径规则、写盘（首写/跳过/拒绝覆盖/失败隔离/状态推进）、CLI `process` 端到端 | ✅ Phase 7（23 用例） |
 | `test_media.py` | 媒体命名与布局、SHA-256 幂等与源替换、**旧缓存绝对路径归一**、清单索引重定位、跳过规则（download/video/max_bytes/上游状态）、dry-run、落库意图、Markdown 本地路径与**知识库外路径拒绝**、CLI `sync → media → process` 端到端 | ✅ Phase 8（44 用例） |
+| `test_external.py` | 抓取封装（超时/重试/退避/重定向/体积上限/scheme 白名单/编码探测）、handler 抽取与选择、resolver 幂等与失败保留 URL、跳过规则、CLI `sync → links → process` 端到端（注入 fake transport，全程无 socket） | ✅ Phase 9 |
 | `support/stub_fieldtheory.py` | 离线上游桩（正常/认证失败/瞬时失败/慢响应/噪声输出），使 Adapter 与 CLI 测试无需网络与浏览器 | ✅ Phase 5 |
 | `fixtures/upstream/*` | 5 个合成夹具：`bookmarks.sample.jsonl`、`media-manifest.sample.json`、`list.sample.json`、`bookmarks-meta.sample.json`、`bookmarks-backfill-state.sample.json`（结构等同真实样本，内容虚构） | ✅ Phase 5 |
 | `__init__.py` | 使 `tests` 成为包，便于 `python -m unittest discover` | ✅ |
@@ -26,8 +27,7 @@
 
 | 文件 | 覆盖内容 | 阶段 |
 | --- | --- | --- |
-| `test_external.py` | 超时/重试/重定向/失败保留 URL | Phase 9 |
-| `test_pipeline.py` | 端到端：采集 → 媒体 → markdown → 知识库 | Phase 10/12 |
+| `test_pipeline.py` | 端到端：采集 → 媒体 → 外链 → markdown → 知识库 | Phase 10/12 |
 
 ## 运行方式
 
@@ -38,7 +38,7 @@
 
 测试运行器为**标准库 unittest**（决定与理由见 `CHANGELOG.md` 的 Phase 4 记录）。
 
-当前全量：**272 个用例**（Phase 4：68 + Phase 5：76 + Phase 6：60 + Phase 7：23 + Phase 8：44 + 入库回归：1），全部离线；
+当前全量：**272 个用例**（Phase 4：68 + Phase 5：76 + Phase 6：60 + Phase 7：23 + Phase 8：44 + 入库回归：1）+ Phase 9 新增（`tests/test_external.py`、ingest/database 回归用例），全部离线；
 整套运行**不会触碰真实上游目录**（有专门校验，见 `CHANGELOG.md` Phase 6 的 Incident）。
 
 ## 必须覆盖的异常场景

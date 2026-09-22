@@ -7,6 +7,8 @@
 * 幂等：同一份上游数据重复入库，第二次的 `new` 必须为 0，且不产生重复行、不重置状态。
 * `media.local_path` 只在**首次插入**时写入：该字段在 Phase 8 之后由媒体层接管
   （存放知识库内的本地路径），重复入库不得用上游旧缓存路径覆盖它。
+* 同理 `external_links.fetch_status` 也只在**首次插入**时写入 `PENDING`：该字段在
+  Phase 9 之后由外链层接管（`FETCHED` / `FAILED` / `SKIPPED`），重复入库不得把它重置。
 
 原始留档
 --------
@@ -280,7 +282,14 @@ class Ingestor:
                 tweet_id=bookmark.tweet_id,
                 url=url,
                 domain=domain_of(url) or None,
-                fetch_status=LinkFetchStatus.PENDING.value,
+                # 与 media.local_path 同一规则（Phase 8 教训）：fetch_status 只在**首次插入**时写入。
+                # 否则每次 sync 都会把 Phase 9 抓取好的 FETCHED/FAILED 重置回 PENDING，
+                # 使外链抓取结果每轮同步都倒退（回归测试见 tests/test_ingest.py）。
+                fetch_status=(
+                    None
+                    if self._repository.get_external_link(bookmark.tweet_id, url) is not None
+                    else LinkFetchStatus.PENDING.value
+                ),
             )
             result = self._repository.upsert_external_link(record, now=now)
             if result.created:

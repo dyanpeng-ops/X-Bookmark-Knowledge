@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from .clock import utc_now_iso
 from .models import BookmarkRecord, ExternalLinkRecord, MediaRecord
 from .states import (
+    ALL_LINK_STATUS_VALUES,
     ALL_STATUS_VALUES,
     BookmarkStatus,
     MediaDownloadStatus,
@@ -448,6 +449,40 @@ class BookmarkRepository:
         ).fetchall()
         return [ExternalLinkRecord.from_row(row) for row in rows]
 
+    def count_external_links(self) -> int:
+        """外链总行数（`status` 报告使用）。"""
+
+        row = self._conn.execute("SELECT COUNT(*) FROM external_links").fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def count_external_links_by_status(self) -> dict[str, int]:
+        """外链抓取状态计数（含 0，便于报告直接打印；Phase 9）。"""
+
+        counts = {value: 0 for value in ALL_LINK_STATUS_VALUES}
+        rows = self._conn.execute(
+            "SELECT fetch_status, COUNT(*) FROM external_links GROUP BY fetch_status"
+        )
+        for status, total in rows:
+            counts[str(status)] = int(total)
+        return counts
+
+    def list_links_by_status(
+        self,
+        status: str | LinkFetchStatus,
+        *,
+        limit: int | None = None,
+    ) -> list[ExternalLinkRecord]:
+        """按抓取状态列出外链（供 Phase 9 的 `links` 命令与排查使用）。"""
+
+        target = LinkFetchStatus(str(status)) if not isinstance(status, LinkFetchStatus) else status
+        params: list[object] = [target.value]
+        sql = "SELECT * FROM external_links WHERE fetch_status = ? ORDER BY tweet_id, url"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
+        rows = self._conn.execute(sql, params).fetchall()
+        return [ExternalLinkRecord.from_row(row) for row in rows]
+
     def upsert_external_link(
         self,
         record: ExternalLinkRecord,
@@ -528,9 +563,11 @@ class BookmarkRepository:
         status: str | LinkFetchStatus,
         *,
         resolved_url: str | None = None,
+        title: str | None = None,
         content_path: str | None = None,
         error_message: str | None = None,
         count_attempt: bool = False,
+        clear_fields: tuple[str, ...] = (),
         now: object | None = None,
     ) -> ExternalLinkRecord:
         """更新单条外链的抓取状态与产出路径（供 Phase 9 使用）。
@@ -551,9 +588,16 @@ class BookmarkRepository:
         if resolved_url is not None:
             assignments.append("resolved_url = ?")
             params.append(resolved_url)
+        if title is not None:
+            assignments.append("title = ?")
+            params.append(title)
         if content_path is not None:
             assignments.append("content_path = ?")
             params.append(content_path)
+        for field in clear_fields:
+            if field not in ("resolved_url", "title", "content_path"):
+                raise ValueError(f"cannot clear unknown external-link field: {field}")
+            assignments.append(f"{field} = NULL")
         if count_attempt:
             assignments.append("attempts = attempts + 1")
         params.extend([_require_tweet_id(tweet_id), url])
@@ -564,9 +608,3 @@ class BookmarkRepository:
                 params,
             )
         return self.require_external_link(tweet_id, url)
-
-
-
-
-
-

@@ -20,9 +20,10 @@ knowledge/X-Bookmarks/YYYY/MM/YYYYMMDD-<tweet_id>.md + assets/<tweet_id>/**
 personal knowledge base
 ```
 
-Current status: Phases 0–8 are implemented — state store (`src/database/`), collector adapter
+Current status: Phases 0–9 are implemented — state store (`src/database/`), collector adapter
 (`src/collector/`), ingest (`src/ingest/`), Markdown renderer (`src/markdown/`), media localisation
-(`src/media/`) and the CLI (`src/cli/`). Phases 9–13 are unimplemented by design — see `PLAN.md` §2.
+(`src/media/`), external link extraction (`src/external/`) and the CLI (`src/cli/`). Phases 10–13
+are unimplemented by design — see `PLAN.md` §2.
 
 ## Components
 
@@ -35,7 +36,7 @@ Verified directory list (2026-09-15):
 | `src/ingest/` | JSONL → normalized rows, dedup, incremental cursor, raw archives | ✅ Phase 6 |
 | `src/processor/` | per-tweet assembly (thread / quote / article / links) | Phase 7, 11 (部分在 `src/markdown/`) |
 | `src/media/` | media localization, stable naming, hash dedup, skip rules | ✅ Phase 8 |
-| `src/external/` (+ `handlers/`) | URL resolution and content extraction | Phase 9 |
+| `src/external/` (+ `handlers/`) | URL resolution and content extraction | ✅ Phase 9 |
 | `src/markdown/` | Markdown rendering, frontmatter, idempotent writes | ✅ Phase 7 |
 | `src/scheduler/` | Windows Task Scheduler wrapper | Phase 13 |
 | `src/cli/` | argument parsing, orchestration, reports (`sync`/`media`/`process`/`status`/`doctor`) | ✅ Phase 6+ |

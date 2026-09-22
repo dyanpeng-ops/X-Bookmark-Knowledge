@@ -585,6 +585,38 @@ class ExternalLinkTests(DatabaseTestCase):
             )
         self.assertEqual(len(self.repo.list_external_links("7000")), 2)
 
+    def test_set_link_status_updates_title(self):
+        """Phase 9：抓取成功时标题也要落库（渲染层直接用）。"""
+
+        url = "https://example.com/titled"
+        self.repo.upsert_external_link(ExternalLinkRecord(tweet_id="7000", url=url), now=T1)
+        record = self.repo.set_link_status(
+            "7000", url, "FETCHED", title="A title", now=T2
+        )
+        self.assertEqual(record.title, "A title")
+
+        # 未提供 title 时不得清空已有标题（部分更新语义）。
+        again = self.repo.set_link_status("7000", url, "FETCHED", now=T2)
+        self.assertEqual(again.title, "A title")
+
+    def test_count_links_reports_status_breakdown(self):
+        for index, status in enumerate(("FETCHED", "FAILED", "FAILED"), start=1):
+            url = f"https://example.com/{index}"
+            self.repo.upsert_external_link(ExternalLinkRecord(tweet_id="7000", url=url), now=T1)
+            if status != "PENDING":
+                self.repo.set_link_status("7000", url, status, now=T2)
+
+        counts = self.repo.count_external_links_by_status()
+        self.assertEqual(counts["FETCHED"], 1)
+        self.assertEqual(counts["FAILED"], 2)
+        self.assertEqual(counts["PENDING"], 0)
+        self.assertEqual(counts["SKIPPED"], 0)
+        self.assertEqual(self.repo.count_external_links(), 3)
+        self.assertEqual(
+            [link.fetch_status for link in self.repo.list_links_by_status("FAILED")],
+            ["FAILED", "FAILED"],
+        )
+
 
 class FullTextSearchTests(DatabaseTestCase):
     """FTS5：可检索、索引跟随更新与删除、入参校验。"""

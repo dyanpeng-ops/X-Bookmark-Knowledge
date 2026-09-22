@@ -2,6 +2,7 @@
 
 依赖注入一个"加载函数"，使本模块可被单测直接使用（不读写真实 `data/`）。
 Phase 8 追加一个可选的 `media_lookup`，把媒体本地化结果带进 `## media` 段落。
+Phase 9 追加一个可选的 `link_lookup`，把外链正文的落点带进 `## external_links` 段落。
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ class MarkdownWriter:
         loader: Callable[[str], Mapping[str, Any]] | None = None,
         status_updater: Callable[[str, str, str | None], None] | None = None,
         media_lookup: Callable[[str], Mapping[str, str]] | None = None,
+        link_lookup: Callable[[str], Mapping[str, Mapping[str, Any]]] | None = None,
     ) -> None:
         """`loader` 接受 tweet_id、返回原始归档 dict（含 `upstream`/`enrichment`）。
 
@@ -65,6 +67,11 @@ class MarkdownWriter:
         `media_lookup`（Phase 8）接受 tweet_id、返回 `{source_url: 路径}`，路径可以是
         绝对路径，也可以是**相对 knowledge_dir** 的路径；本类会换算成相对 Markdown
         文件自身的 POSIX 路径。返回空 / 抛错时 `## media` 段落回退为远程 URL。
+
+        `link_lookup`（Phase 9）接受 tweet_id、返回
+        `{url: {title, resolved_url, content_path, fetch_status, error_message}}`；
+        `content_path` 同样可绝对可相对，本类只把"相对本文件"的显示路径交给渲染层。
+        返回空 / 抛错时 `## external_links` 回退为 Phase 7 的纯 URL 列表。
         """
 
         self._knowledge_dir = Path(knowledge_dir)
@@ -73,6 +80,7 @@ class MarkdownWriter:
         self._loader = loader
         self._status_updater = status_updater
         self._media_lookup = media_lookup
+        self._link_lookup = link_lookup
 
     def _resolve_loader(self) -> Callable[[str], Mapping[str, Any]]:
         if self._loader is not None:
@@ -137,6 +145,7 @@ class MarkdownWriter:
             enrichment,
             self._options,
             media_files=self._resolve_media_files(tweet_id, target),
+            link_details=self._resolve_link_details(tweet_id, target),
         )
         if target.exists():
             existing = target.read_text(encoding="utf-8")
@@ -171,19 +180,56 @@ class MarkdownWriter:
             return {}
         resolved: dict[str, str] = {}
         for url, value in raw.items():
-            text = str(value or "").strip()
-            if not text:
-                continue
-            candidate = Path(text)
-            if not candidate.is_absolute():
-                candidate = self._knowledge_dir / candidate
-            try:
-                display = os.path.relpath(candidate, target.parent)
-            except ValueError:
-                # 跨盘符（Windows）无法计算相对路径：保留原路径而不是让整条记录失败。
-                display = str(candidate)
-            resolved[str(url)] = display.replace("\\", "/")
+            display = self._relative_display(value, target)
+            if display:
+                resolved[str(url)] = display
         return resolved
+
+    def _resolve_link_details(
+        self, tweet_id: str, target: Path
+    ) -> dict[str, dict[str, Any]]:
+        """把外链查询结果换算成渲染层要用的字典（Phase 9）。
+
+        只做两件事：`content_path` 换算为"相对本 Markdown 文件"的 POSIX 路径；
+        其余字段原样透传（`fetch_status` / `title` / `resolved_url` / `error_message`）。
+        查询失败不终止渲染：`## external_links` 回退纯 URL 列表即可。
+        """
+
+        if self._link_lookup is None:
+            return {}
+        try:
+            raw = self._link_lookup(tweet_id) or {}
+        except Exception as exc:  # noqa: BLE001 - 外链信息缺失不该让 Markdown 失败
+            logger.warning("link lookup failed for %s: %s", tweet_id, exc)
+            return {}
+        resolved: dict[str, dict[str, Any]] = {}
+        for url, value in raw.items():
+            if not isinstance(value, Mapping):
+                continue
+            detail = {str(key): item for key, item in value.items()}
+            path = self._relative_display(detail.get("content_path"), target)
+            if path:
+                detail["content_path"] = path
+            else:
+                detail.pop("content_path", None)
+            resolved[str(url)] = detail
+        return resolved
+
+    def _relative_display(self, value: object, target: Path) -> str | None:
+        """把绝对/相对 knowledge_dir 的路径换算为"相对本 Markdown 文件"的 POSIX 路径。"""
+
+        text = str(value or "").strip()
+        if not text:
+            return None
+        candidate = Path(text)
+        if not candidate.is_absolute():
+            candidate = self._knowledge_dir / candidate
+        try:
+            display = os.path.relpath(candidate, target.parent)
+        except ValueError:
+            # 跨盘符（Windows）无法计算相对路径：保留原路径而不是让整条记录失败。
+            display = str(candidate)
+        return display.replace("\\", "/")
 
 
 def _iso_from_upstream(upstream: Mapping[str, Any]) -> str | None:

@@ -29,11 +29,11 @@ Knowledge-Agent（摘要 / 标签 / 主题 / 实体 / 关联）
 | 功能 | 说明 | 实现阶段 |
 | --- | --- | --- |
 | 增量同步 | 默认只处理新书签，已处理的书签跳过 | Phase 6 |
-| 幂等执行 | 同一任务跑两次不产生重复数据、不重复下载媒体 | Phase 6 |
+| 幂等执行 | 同一任务跑两次不产生重复数据、不重复复制媒体 | Phase 6（媒体本地化：Phase 8） |
 | 完整 Tweet 归档 | 正文、作者、发布时间、Tweet URL、会话 ID | Phase 7 |
 | 媒体本地化 | 上游 `media/` 缓存复制到知识库自身的 `assets/{tweet_id}/`，稳定命名 + 哈希去重；Markdown 只引用本地相对路径 | ✅ Phase 8 |
 | X Article | 识别并保存 Article 正文 | Phase 7 / 9 |
-| 外链正文抽取 | 重定向解析 + 正文提取 + Markdown 清洗；失败也保留原始 URL | Phase 9 |
+| 外链正文抽取 | 重定向解析 + 正文提取 + Markdown 清洗；失败也保留原始 URL | 🟡 Phase 9（实现完毕、未验收） |
 | 媒体与内容完整性测试 | Test A–L（普通/长推/Thread/引用/Article/单图/多图/视频/外链/GitHub/PDF/多 URL） | Phase 10 |
 | AI 增强（可选） | 摘要、标签、主题、关键点、实体；**只追加，不改原始字段** | Phase 11 |
 | 状态机 | `NEW → COLLECTED → PROCESSED → ENRICHED → COMPLETED`（失败 `FAILED`） | Phase 12 |
@@ -47,7 +47,7 @@ Knowledge-Agent（摘要 / 标签 / 主题 / 实体 / 关联）
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Collector（复用上游，只读）                                   │
-│   fieldtheory CLI  →  ~/.fieldtheory/bookmarks/             │
+│   fieldtheory CLI  →  data/upstream/（FT_DATA_DIR，ADR-011）  │
 │     bookmarks.jsonl · media-manifest.json · media/**        │
 └──────────────────────────┬──────────────────────────────────┘
                            │ src/collector/（Adapter）
@@ -60,8 +60,8 @@ Knowledge-Agent（摘要 / 标签 / 主题 / 实体 / 关联）
 │   external  → 外链解析 / 重定向 / 正文抽取                     │
 │   markdown  → 逐条 Markdown 生成                             │
 │   scheduler → Windows Task Scheduler                         │
-│   cli       → sync / status / retry / process / enrich /      │
-│               verify / doctor                                │
+│   cli       → sync / media / links / process / status /       │
+│               doctor（retry / enrich / verify 尚未实现）        │
 └──────────────────────────┬──────────────────────────────────┘
                            ▼
         knowledge/X-Bookmarks/YYYY/MM/YYYYMMDD-{tweet_id}.md
@@ -102,19 +102,21 @@ X-Bookmark-Knowledge/
 │   ├── ingest/                入库与状态机 — Phase 6 ✅
 │   ├── processor/             单条内容加工 — Phase 11
 │   ├── media/                 媒体本地化 — Phase 8 ✅
-│   ├── external/              外链解析（handlers/ 分站处理器）— Phase 9
+│   ├── external/              外链解析（fetcher + handlers/ 分站处理器 + resolver）— Phase 9 ✅
 │   ├── markdown/              Markdown 生成 — Phase 7 ✅
 │   ├── database/              schema / 迁移 / 查询 — Phase 4 ✅
 │   ├── scheduler/             调度封装 — Phase 13
-│   └── cli/                   命令行入口 — Phase 6+ ✅（sync / media / process / status / doctor）
+│   └── cli/                   命令行入口 — Phase 6+ ✅（sync / media / links / process / status / doctor）
 │
 ├── data/                      程序数据（不入 Git）
+│   ├── upstream/              上游只读输入：bookmarks.jsonl · media-manifest.json · media/**
 │   ├── raw/                   逐条原始 JSON
 │   ├── state/                 SQLite 状态库
 │   └── logs/                  YYYY-MM-DD.log
 │
 ├── knowledge/
-│   └── X-Bookmarks/           用户知识库产出
+│   └── X-Bookmarks/           用户知识库产出：YYYY/MM/*.md + YYYY/MM/assets/{tweet_id}/**
+│                              ⚠️ 书签内容与媒体默认不入 Git（仅 README.md 被跟踪）
 │
 ├── tests/                     测试
 └── scripts/                   运维脚本（PowerShell 5.1）
@@ -159,9 +161,11 @@ npm install -g fieldtheory
 python -m src.cli doctor
 ```
 
-> **现状（Phase 4，2026-09-15）**：第 2–4 步已完成——`.venv`（Python 3.12.13）与 `requirements.txt` 已存在（当前无第三方运行时依赖）。第 5 步（上游采集器）本机已安装 `fieldtheory@1.3.22`。第 6 步 `python -m src.cli doctor` 属 Phase 6，**尚未实现**。
+> **现状（2026-09-20）**：`.venv`（Python 3.12.13）与 `requirements.txt`（PyYAML 6.0.3）已就绪；上游 `fieldtheory@1.3.22` 本机已安装（PowerShell 中用 `fieldtheory.cmd`，不要用 `ft`）；`python -m src.cli doctor` 自 Phase 6 起可用（实测输出 `Doctor result: OK`）。项目**没有** `pyproject.toml`，依赖只走 `requirements.txt`。
 >
-> 测试运行方式：`.\.venv\Scripts\python.exe -m unittest discover -s tests -t .`
+> **代码来源**：本项目已托管在**私有**仓库 `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git`；新机器 `git clone` 后从第 2 步继续（需要该账号登录或 PAT）。仓库**不含** `config/config.yaml`、`data/` 与书签内容。
+>
+> 测试运行方式：`.\\.venv\\Scripts\\python.exe -m unittest discover -s tests -t .`（**跑测试前须先获得用户批准**，见第 14 节）
 
 ---
 
@@ -178,7 +182,7 @@ python -m src.cli doctor
 | `collector.auth` | 认证方式（firefox / cookies / oauth）与浏览器选择 |
 | `ingest` | 去重键、失败重试上限、增量提前结束阈值 |
 | `media` | 是否下载、是否含视频、单文件上限、稳定命名 |
-| `external` | 外链抓取超时/重试/单页上限/分站处理器 |
+| `external` | 外链抓取超时/重试/单页上限/分站处理器（已实现的 handler：`web` / `github`） |
 | `markdown` | 文件名模式、frontmatter、段落开关、覆盖策略 |
 | `ai` | AI 增强开关、引擎、以及**绝对不可被 AI 修改的字段列表** |
 | `logging` | 日志级别、每日文件、同步报告 |
@@ -238,30 +242,32 @@ fieldtheory sync --api
 python -m src.cli sync
 ```
 
-预期行为：
+`sync` 只做"采集 + 入库"；媒体、外链、Markdown 由后续三条命令完成（顺序见第 9 节）：
 
-1. 调用上游完成首次全量采集（数据落在上游目录，本项目只读）
-2. 逐条 ingest 到 SQLite
-3. `media` 把上游媒体本地化到知识库 `assets/{tweet_id}/`
-4. `process` 生成逐条 Markdown 到 `knowledge/X-Bookmarks/`
-5. 打印统计报告：
+1. `sync` —— 调用上游完成采集（数据落在 `data/upstream/`，本项目只读）→ 逐条 ingest 到 SQLite → 打印报告
+2. `media` —— 上游媒体本地化到 `assets/{tweet_id}/`
+3. `links` —— 外链正文抓取到 `assets/{tweet_id}/links/`（Phase 9，**未验收**）
+4. `process` —— 渲染逐条 Markdown 到 `knowledge/X-Bookmarks/`
+
+`sync` 的实际报告（字段名以代码为准）：
 
 ```text
-X Bookmark Sync Report
-
-Fetched: 100
-New: 8
-Skipped: 92
-Failed: 0
-
-Tweets: 8
-Images: 13
-Videos: 1
-External URLs: 6
-External parsed: 5
-External failed: 1
-
-Duration: 02:31
+Sync report
+  finished at   : 2026-09-20T02:40:49Z
+  upstream dir  : <project>/data/upstream
+  upstream rows : 5
+  enrichment    : 5 record(s) from `list --json`
+  fetched       : 5
+  new           : 5
+  updated       : 0
+  unchanged     : 0
+  failed        : 0
+  transitions   : NEW/FAILED -> COLLECTED = 0
+  raw archives  : 5 written, 0 unchanged
+  media rows    : 6 new, 0 updated, 0 unchanged
+  link rows     : 5 new, 0 updated, 0 unchanged
+  db status     : COLLECTED 5 | COMPLETED 0 | ENRICHED 0 | FAILED 0 | NEW 0 | PROCESSED 0
+  last synced   : 2026-09-20T02:40:49Z
 ```
 
 ## 9. 增量同步
@@ -278,16 +284,32 @@ python -m src.cli sync
 - 已处于 `PROCESSED/ENRICHED/COMPLETED` 的记录直接跳过
 - Markdown 已存在且内容哈希一致时不重写
 - 媒体已存在且哈希一致时不重复复制（`media.local_path` 已指向知识库内文件）
+- 外链正文已存在且与最新抓取一致时不重写；`FETCHED` 的外链**不重复联网**（`--force` 才重抓）
 
 **验收标准**：同一任务连续执行两次，第二次 `New: 0`，且 `knowledge/` 下不新增任何重复文件。
 
-**流水线顺序**（Phase 7 起为三条命令，各司其职）：
+**流水线顺序**（Phase 9 起为四条命令，各司其职）：
 
 ```powershell
 python -m src.cli sync      # 采集 + 幂等入库
 python -m src.cli media     # 媒体本地化（先加 --dry-run 可只看不写）
-python -m src.cli process   # 渲染 Markdown；媒体段已本地化时引用本地相对路径
+python -m src.cli links     # 外链正文抓取（--dry-run / --force / --tweet-id / --limit）
+python -m src.cli process   # 渲染 Markdown；媒体与外链段引用本地相对路径
 ```
+
+外链行为（Phase 9）：
+
+- 成功：标题与正文写入 `assets/{tweet_id}/links/{link_key}.md`，SQLite 记录 `resolved_url/title/content_path/FETCHED`；
+  Markdown 的 `## external_links` 显示 `- [标题](原始 URL)` + 正文相对路径。
+- 失败：状态 `FAILED` 并记录原因与尝试次数，**原始 URL 永远保留**；`external.max_attempts`（默认 3）到顶后不再重试，需 `links --force`。
+- 跳过（不联网）：非 http(s) 链接、`external.skip_domains`（默认 `x.com`/`twitter.com`，正文已由 `## article` 提供）、
+  单条推文超出 `max_links_per_tweet`、未实现的内容类型（如 `pdf`）。
+- SSRF 防护（复审修复）：目标为主机回环/私网/链路本地/云元数据等非公网地址时直接拒绝并发请求
+  （初始与每一跳重定向后均复核），记为策略跳过；由 `external.block_non_public_hosts`（默认开启）
+  控制，`external.allow_hosts` 为显式白名单。
+- dry-run 语义：`links --dry-run` 仍会发起真实网络请求，仅不写文件/库（与 `media --dry-run`、
+  `process --dry-run` 纯本地不同）。
+- 网络面：标准库 `urllib`，timeout/重试/退避/逐跳重定向/编码探测/单页体积上限；请求间有 `external.delay_seconds` 礼貌间隔。
 
 ---
 
@@ -303,9 +325,9 @@ ai:
 
 约束（硬性）：
 
-- AI 只能**追加**：frontmatter 中的 `ai_*` 字段，以及正文的 `## AI Analysis` 段。
+- AI 只能**追加**：frontmatter 中的 `ai_*` 字段，以及正文的 `## ai_analysis` 段（段落名以渲染器为准，ADR-015）。
 - AI **绝对不可修改**：`tweet_id`、`tweet_text`、`author`、`created_at`、`tweet_url`、`source`。
-- `verify` 命令会校验原始字段哈希未变，一旦被改动即报错。
+- 计划中的 `verify` 命令（Phase 10）会校验原始字段哈希未变，一旦被改动即报错；该命令**尚未实现**。
 - AI 失败不影响已生成的基础 Markdown（状态停在 `PROCESSED`，可重试）。
 
 ---
@@ -328,6 +350,8 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 
 要求：无交互运行、日志落 `data/logs/`、失败返回非零退出码、可随时手动关闭。
 
+> 状态：`scripts/` 下的三个脚本属 **Phase 13**，当前目录只有 `README.md`，因此上面的命令**尚不可用**（见 `scripts/README.md`）。
+
 ---
 
 ## 12. 故障排查
@@ -338,14 +362,14 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 | 历史书签没抓全 / 第二次 `sync` 报 `All caught up` | 默认增量在连续 3 页无新增后停止，不会继续翻页 | 首轮或补历史时加 `--continue`，或执行 `--rebuild` 全量重爬 |
 | Article 书签的正文是空的 | 正文**不在** `bookmarks.jsonl`，只在上游 `bookmarks.db` | 先 `sync --gaps` 展开，再通过 `fieldtheory list --json` / `show <id> --json` 读取（本项目 Adapter 已如此实现） |
 | 想确认账号到底有多少书签 | 单次 `sync` 的退出码不能证明覆盖完整 | 交叉核对 `bookmarks-meta.json: totalBookmarks`、`fieldtheory stats --json`、`backfill-state.stopReason` |
-| `C:` 盘空间吃紧 | 上游媒体默认下载到 `~/.fieldtheory/bookmarks/media`（单文件上限 200 MB） | 用 `FT_DATA_DIR` 把上游数据目录重定位到 `D:`（见 ADR-011），或 `--no-media` / `--skip-profile-images` |
+| `C:` 盘空间吃紧 | 上游媒体默认下载到上游数据目录（本项目已按 ADR-011 重定位到 `data/upstream/`，单文件上限 200 MB） | 保持 `FT_DATA_DIR` 指向 `D:`，或用 `--no-media` / `--skip-profile-images` |
 | PowerShell 中输入 `ft` 无反应 | `ft` 是 PowerShell 内置别名 `Format-Table` | 使用 `fieldtheory` 或 `ft.cmd` |
 | 命令挂住不返回 | 上游某些子命令（如裸 `fieldtheory model`）是交互式的 | 不在脚本/定时任务中调用交互式子命令 |
 | 同步成功但 `New: 0` | 没有新书签，或 Cookie/OAuth 已过期 | 运行 `python -m src.cli doctor` 检查认证 |
-| `knowledge/` 中 Markdown 缺少图片 | 媒体未下载或下载失败 | 查看 `media` 表状态，执行 `python -m src.cli retry` |
+| `knowledge/` 中 Markdown 缺少图片 | 媒体未本地化，或上游源文件缺失 | 查看 `media` 表状态与 `error_message`，执行 `python -m src.cli media`（先 `--dry-run` 可只看不写） |
 | 外链正文为空 | 目标站点反爬/超时 | 属预期降级：Markdown 中保留原始 URL 与失败原因 |
 | 磁盘空间不足 | 视频/大图累积 | 关闭视频下载（`media.download_video: false`），检查 `D:` 余量 |
-| 同一命令重复执行产生重复文件 | 幂等逻辑缺陷 | **视为 bug**，用 `tests/test_dedup.py` 复现并修复 |
+| 同一命令重复执行产生重复文件 | 幂等逻辑缺陷 | **视为 bug**，用 `tests/test_ingest.py` / `tests/test_media.py` 中的幂等用例复现并修复 |
 
 ---
 
@@ -353,6 +377,7 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 
 - **数据不出本机**：本项目不向任何第三方上报数据；唯一网络行为是采集（上游负责）与外链正文抓取（自研）。
 - **敏感信息不入库**：`.gitignore` 覆盖 `config/config.yaml`、`.env*`、`cookies*`、`tokens*`、`credentials*`、`*.db`、`data/`。
+- **个人数据不入库**：仓库是**私有**库，且 `knowledge/*` 默认被忽略——真实书签 Markdown 与媒体资产**不进 Git**（仅 `knowledge/X-Bookmarks/README.md` 被跟踪）；确需纳管时用 `git add -f <路径>`。
 - **日志脱敏**：日志中只允许出现"凭证是否存在"，不允许出现凭证值。
 - **只读上游**：不写入 `~/.fieldtheory/**`。
 - **不越界写入**：禁止写入项目目录之外的路径、禁止直接写上级 `knowledge/`。
@@ -364,7 +389,12 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 
 ### 开发流程（每个 Phase）
 
-改代码 → 跑测试 → 检查文件 → 更新 `PLAN.md` → 更新 `CHANGELOG.md` → 汇报 → 标记下一阶段。
+1. 改代码 → 2. **提交「待验证清单」并等待用户批准** → 3. 按批准项跑测试 → 4. 检查文件 →
+5. 更新 `PLAN.md` → 6. 更新 `CHANGELOG.md` → 7. 汇报 → 8. 标记下一阶段。
+
+> **验证授权关卡（2026-09-20 用户指令，见 `AGENTS.md` 第 2 节第 16 / 17 条）**：只读检查（读文件、搜索、`git status` / `git log`）可直接做；
+> **跑测试、任何联网（`git ls-remote` / `clone` / `fetch` / `push` / 抓网页）、任何写盘（含提交、写数据库 / 知识库）、任何动用账号凭据的操作，都必须先给出「命令 + 目的 + 影响范围」并得到批准**；
+> 未获批准时，阶段只能表述为“实现完毕、未验收”，不得对外声称已验证。
 
 ### 代码组织约定
 
@@ -403,24 +433,27 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 | 6 增量同步 + CLI | ✅ 完成（2026-09-16）：`src/config.py`（PyYAML）+ `src/ingest/` + `src/cli/`（sync/status/doctor）+ 60 用例；**M2 幂等达成** |
 | 7 逐条 Markdown 生成 | ✅ 完成（2026-09-17）：`src/markdown/`（render + writer）+ `process` 子命令 + 23 用例；**M3 达成**（真实 5 条，二次运行 `written: 0 / unchanged: 5`） |
 | 8 媒体本地化 | ✅ 完成（2026-09-20）：`src/media/localizer.py` + `media` 子命令 + 44 用例；6/6 真实媒体本地化、`media.local_path` 归一至知识库内、`## media` 引用本地相对路径（ADR-016） |
-| 9+ 外链 / 完整性 / AI / 交接 / 调度 | ⏳ 未开始 |
+| 9 外链正文抽取 | ✅ 实现完毕 + 复审关闭（2026-09-21）：fetcher + handlers + resolver + netguard（SSRF 逐跳防护），canonical 入库；94 用例经批准全绿。真实数据写运行与提交仍待批准（ADR-017/018） |
+| 10+ 完整性 / AI / 交接 / 调度 | ⏳ 未开始 |
 
-**当前实现的代码范围**：`src/database/`、`src/collector/`、`src/config.py`、`src/ingest/`、`src/markdown/`、`src/media/`、`src/cli/`。`src/external/`、`src/processor/`、`src/scheduler/` 仍只有包声明（Phase 9 起实现）。
+**当前实现的代码范围**：`src/database/`、`src/collector/`、`src/config.py`、`src/ingest/`、`src/markdown/`、`src/media/`、`src/external/`、`src/cli/`。`src/processor/`、`src/scheduler/` 仍只有包声明。
 
 **验证命令**
 
 ```powershell
 cd D:\Users\label-workplace\Agent-Eval\AI-Agent-Lab\01_Knowledge-Agent\projects\X-Bookmark-Knowledge
 .\.venv\Scripts\python.exe -m unittest discover -s tests -t .
-# Ran 272 tests ... OK   (exit 0)
+# 最近一次通过：Ran 369 tests ... OK   (exit 0)   <- 2026-09-21，经批准运行（含 Phase 9 的 94 用例）
+# 注：`links --dry-run` 会发起真实 HTTP；Phase 9 的真实数据写运行（links、process、二次 links、sync 回归）仍待批准
 ```
 
-**日常运行**（采集 + 入库 + 媒体本地化 + Markdown；第二次执行 New 必须为 0）
+**日常运行**（采集 + 入库 + 媒体本地化 + 外链抓取 + Markdown；第二次执行 New 必须为 0）
 
 ```powershell
 python -m src.cli sync              # 采集（上游 fieldtheory）+ 幂等入库 + 报告
 python -m src.cli sync --skip-collect  # 只入库已有上游数据（不联网）
 python -m src.cli media             # 媒体本地化到知识库 assets/（--dry-run 只看不写）
+python -m src.cli links             # 外链正文抓取（--force 重抓已抓过的；dry-run 会联网但不写盘）
 python -m src.cli process           # 渲染 Markdown（--overwrite 允许覆盖变化内容）
 python -m src.cli status            # 只读状态
 python -m src.cli doctor            # 环境自检
@@ -434,5 +467,3 @@ read_bookmarks() / read_media_manifest()           → 契约校验通过
 list_enriched()                                    → 4 篇 article 正文可取（JSONL 中不存在）
 ALL REAL-DATA READS OK   (exit 0, fieldtheory 1.3.22)
 ```
-
-
