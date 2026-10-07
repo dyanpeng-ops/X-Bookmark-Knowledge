@@ -49,3 +49,6 @@ knowledge/X-Bookmarks/*
 !knowledge/X-Bookmarks/README.md
 knowledge/**/.cache/
 knowledge/**/tmp/
+
+.DS_Store
+**/.DS_Store
