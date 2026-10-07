@@ -55,7 +55,7 @@
 | 项 | 决定 | 状态 |
 | --- | --- | --- |
 | 语言 | Python | ✅ 已定 |
-| 解释器 | 3.12.13（`%APPDATA%\uv\python\cpython-3.12.13-windows-x86_64-none`） | ✅ 已定（默认 3.14.3 过新） |
+| 解释器 | 3.13.12（`.workbuddy/binaries/python/versions/3.13.12`，macOS） | ✅ 已定（2026-10-07 于 macOS 重建 venv） |
 | 虚拟环境 | `.venv/`（项目内，已 gitignore） | ✅ 已于 2026-09-15 创建（Python 3.12.13，内部装 pip 25.x） |
 | 状态存储 | SQLite（stdlib `sqlite3`） | ✅ 已定 |
 | 全文检索 | SQLite FTS5 | ✅ 已于 2026-09-15 以 Python 3.12.13 / SQLite 3.53.1 实测：建表与 `MATCH` 查询可用 |
