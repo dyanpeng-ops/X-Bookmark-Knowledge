@@ -24,6 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.canonical.validate import validate_bookmark  # noqa: E402
 from src.storage import json_projection  # noqa: E402
 from src.storage.json_projection import (  # noqa: E402
+    CanonicalJsonError,
     InvalidCanonicalBookmark,
     normalized_path_for,
     write_all_canonical_json,
@@ -198,6 +199,50 @@ class SelfAuditFindingsTests(JsonProjectionTestCase):
         # 被拒后不得留下任何文件（目录可能压根没被创建）
         leftovers = list(self.out_dir.iterdir()) if self.out_dir.exists() else []
         self.assertEqual(leftovers, [])
+
+
+class AuditFindingRegressionTests(JsonProjectionTestCase):
+    """P1/P2：Muse 审计 F-001 与 F-004 的回归用例。"""
+
+    def test_serialization_error_does_not_abort_batch(self):
+        """F-001：循环引用曾导致批次中断且后续条目静默丢失。"""
+
+        bad = bookmark("9")
+        bad["media"] = [{"type": "photo", "url": "https://a/b.png"}]
+        bad["media"][0]["self"] = bad["media"][0]  # 循环引用（validate 不检查 media 内部未知键）
+
+        report = write_all_canonical_json([bookmark("1"), bad, bookmark("3")], self.out_dir)
+
+        self.assertFalse(report.ok)
+        self.assertEqual(len(report.outcomes), 2)
+        self.assertEqual(len(report.failures), 1)
+        self.assertEqual(report.failures[0][0], "9")
+        self.assertIn("Circular", report.failures[0][1])
+        self.assertTrue((self.out_dir / "1.json").is_file())
+        self.assertTrue((self.out_dir / "3.json").is_file())
+        self.assertFalse((self.out_dir / "9.json").exists())
+
+    def test_single_serialization_error_raises_domain_error(self):
+        bad = bookmark("9")
+        bad["media"] = [{"type": "photo", "url": "https://a/b.png"}]
+        bad["media"][0]["self"] = bad["media"][0]
+        with self.assertRaises(CanonicalJsonError):
+            write_canonical_json(bad, self.out_dir)
+
+    def test_windows_reserved_device_names_rejected(self):
+        """F-004：`CON.json` 在 Windows 上等同设备名，必须对称拒绝。"""
+
+        for value in ("CON", "con", "Nul", "COM1", "lpt9", "CON.json", "aux.md"):
+            with self.subTest(tweet_id=value):
+                with self.assertRaises(InvalidCanonicalBookmark):
+                    normalized_path_for(self.out_dir, value)
+                with self.assertRaises(InvalidCanonicalBookmark):
+                    write_canonical_json(bookmark(tweet_id=value), self.out_dir)
+
+    def test_ordinary_ids_still_accepted(self):
+        for value in ("1900000000000000101", "1.5", "console", "COM10", "savebox:abc"):
+            with self.subTest(tweet_id=value):
+                self.assertTrue(normalized_path_for(self.out_dir, value).name.endswith(".json"))
 
 
 class PathSafetyTests(JsonProjectionTestCase):

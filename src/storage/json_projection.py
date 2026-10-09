@@ -42,6 +42,14 @@ __all__ = [
 #: 文件名中禁止出现的字符（跨平台）：路径分隔符与 NUL。
 _FORBIDDEN_IN_NAME = ("/", "\\", "\x00")
 
+#: Windows 保留设备名（审计 F-004）：即使是 `CON.json` 也会被当作设备。
+#: 跨平台改造下必须对称拒绝，而不是依赖事后 OSError。
+_RESERVED_DEVICE_NAMES = frozenset(
+    ["CON", "PRN", "AUX", "NUL"]
+    + [f"COM{i}" for i in range(1, 10)]
+    + [f"LPT{i}" for i in range(1, 10)]
+)
+
 #: 新建文件的权限掩码基准：`os.open(..., 0o666)` 会再按进程 umask 收敛，
 #: 结果与仓库其它文件（常见 0644）一致；不使用 `tempfile.mkstemp`，因为它固定 0600，
 #: 会让 `data/normalized/*.json` 变成「仅属主可读」（自审 F1）。
@@ -128,7 +136,15 @@ def write_canonical_json(
             tweet_id=tweet_id, path=target, written=False, reason="unchanged"
         )
 
-    text = json.dumps(dict(bookmark), **_DUMP_KWARGS) + "\n"
+    try:
+        text = json.dumps(dict(bookmark), **_DUMP_KWARGS) + "\n"
+    except (ValueError, TypeError) as exc:
+        # 审计 F-001：json.dumps 的序列化异常（如循环引用 ValueError、
+        # 不可序列化对象 TypeError）此前会穿透批量入口，导致其后条目
+        # **静默丢失且不进 failures 清单**。此处统一转成领域错误。
+        raise CanonicalJsonError(
+            f"cannot serialize canonical bookmark {tweet_id!r}: {type(exc).__name__}: {exc}"
+        ) from exc
     _atomic_write_text(target, text)
     return JsonProjectionOutcome(
         tweet_id=tweet_id,
@@ -150,7 +166,7 @@ def write_all_canonical_json(
         label = _label_of(bookmark, index)
         try:
             outcomes.append(write_canonical_json(bookmark, normalized_dir))
-        except (CanonicalJsonError, OSError) as exc:
+        except (CanonicalJsonError, OSError, ValueError, TypeError) as exc:
             failures.append((label, f"{type(exc).__name__}: {exc}"))
     return JsonProjectionReport(outcomes=tuple(outcomes), failures=tuple(failures))
 
@@ -179,6 +195,11 @@ def _safe_tweet_id(value: Any) -> str:
         )
     if value.startswith(".") or value in {".", ".."}:
         raise InvalidCanonicalBookmark(f"tweet_id must not start with '.': {value!r}")
+    stem = value.split(".", 1)[0].upper()
+    if stem in _RESERVED_DEVICE_NAMES:
+        raise InvalidCanonicalBookmark(
+            f"tweet_id maps to a reserved device name on Windows: {value!r}"
+        )
     return value
 
 
