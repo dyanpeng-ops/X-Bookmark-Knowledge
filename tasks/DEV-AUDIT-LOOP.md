@@ -79,3 +79,19 @@ Phase 内部按 Step 实现，全部完成并通过自验后才出报告。
 
 - 数据与知识分离、敏感信息不进产物、只读上游、先验证后声明
 - 遇架构/Schema 级变更先停下报告（AGENTS §2.13、§2.15、§8）
+
+## 8. 运维备注（已验证的操作方法）
+
+上传到 Drive 用浏览器控制（`browser-harness` + 本机已登录 Chrome）：
+
+1. 打开目标文件夹 → `activate_tab(current_tab())`（后台标签页会暂停渲染，菜单点不开）
+2. `Page.setInterceptFileChooserDialog(enabled=True)`（避免弹出原生文件选择框）
+3. 点「新建」→ 菜单出现后，**优先用 JS 派发 click** 触发「上传文件」菜单项
+   （`[...document.querySelectorAll('[role="menuitem"]')].find(e => e.innerText.startsWith('上传文件')).click()`）
+   —— 实测菜单项可能渲染在**视口之外**（本例 y=813 > 视口高 811），坐标点击会静默落空
+4. `wait_for_element('input[type=file]')` 后用 `upload_file('input[type=file]', 绝对路径)` 注入文件
+5. 校验：页面出现「已完成 1 项上传」+ 列表中出现文件名；再核对大小/时间与本地一致
+
+读取审计报告：文件夹页面的列表渲染较慢（虚拟滚动），
+优先用「搜索结果」页（`/drive/u/1/search?q=<关键词>`）取 `data-id`，
+或直接 `/file/d/<id>/view` 预览页取 `document.body.innerText`（会带少量预览器外壳文字，需剔除）。
