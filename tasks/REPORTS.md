@@ -1,7 +1,10 @@
 # 报告索引（开发报告 ↔ 审计报告）
 
 > 用途：让**开发报告**与**审计报告**用同一套编号一一对应，双方不必靠时间戳猜配对。
-> 规则由 `tasks/DEV-AUDIT-LOOP.md` §2 定义；本文件是**登记表**（每产出一份报告就登记一行）。
+> 规则由自动化流水线定义（`/Users/nanopeng/AI-Agent-Lab/X-Bookmark-Knowledge-Automation/README.md`
+> 与 Drive `X-Bookmark-Knowledge-Automation/00_CONTROL/`）；本文件是**登记表**（每产出一份报告就登记一行）。
+> 历史说明：原 `tasks/DEV-AUDIT-LOOP.md`（含旧「常设授权」）已于 2026-10-09 按用户裁决**废弃并删除**——
+> 其授权条款与新的 DSH 流水线任务书 §7 冲突，**不再有效**。历史报告中的引用保留原样，仅作记录。
 
 ---
 
