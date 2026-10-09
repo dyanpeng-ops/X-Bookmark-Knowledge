@@ -46,7 +46,7 @@ Knowledge-Agent、AI 分类/摘要/标签、Embedding/RAG、外链抓取、新 S
 | Step | 内容 | 验收 |
 |---|---|---|
 | S1 | **JSON 投影**：路径布局、原子写（临时文件+替换）、内容未变跳过、非法 Canonical 拒绝 | `tests/test_storage_json.py` 全绿 |
-| S2 | **Markdown 投影**：路径 `{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`、frontmatter 14 键、正文两段式、不覆盖内容不同的既有文件 | 新增测试 + 既有 markdown 测试不回归 |
+| S2 ✅ | **Markdown 投影**：路径 `{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`、frontmatter 14 键、正文两段式、不覆盖内容不同的既有文件 | ✅ 已交付：`src/storage/markdown_projection.py` + `tests/test_storage_markdown.py`（30 用例）；全量零回归 |
 | S3 | **SQLite 索引**：表结构按 R6 两类划分；写入/更新幂等 | 新增测试 |
 | S4 | **rebuild-index**：删库重建；运行态重置 | 新增测试（含「删库→重建→内容索引一致」） |
 | S5 | 全量回归 + 真实数据**只读 dry-run** 验收（需另行批准） | 报告 |
@@ -79,3 +79,32 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
 ---
 
 *本任务书由开发方依 `ARCHITECTURE.md` 生成；不属于架构决策，凡涉及架构取舍之处均标注为「待用户决策」。*
+
+---
+
+## 8. 实施状态（滚动更新）
+
+| Step | 状态 | 证据 |
+|---|---|---|
+| S1 JSON 投影 | ✅ 已完成 | `src/storage/json_projection.py`；30 用例（含审计 F-001/F-004 回归）；Muse 第 2 轮复审 **PASS**（`RUN-20261009T134544Z-r5r2`）|
+| S2 Markdown 投影 | ✅ 已完成 | `src/storage/markdown_projection.py`；`tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 被捕获；全量 **592 用例**失败集 md5 未变（零回归）|
+| S3 SQLite 索引（R6 两类字段） | ⏳ 待开工 | — |
+| S4 `rebuild-index` | ⏳ 待开工 | — |
+| S5 全量验收 + 真实数据 dry-run | ⏳ 待批准 | — |
+
+### S2 实现要点
+
+- 路径布局**复用** `src.markdown.render.date_parts`，保证与 Phase 8 的 `assets/` 布局永不漂移；
+- frontmatter 以 **Canonical 契约（决策 D2/D5）为准**：`author` = 显示名、`author_username` = handle；
+  `ARCHITECTURE.md` §7 示例中的 `author: "username"` 属 D2 明确之前的旧写法，本实现按 D2 处理；
+- 正文两段式：`## Original Tweet`（可恢复原文）+ `## AI Analysis`（**仅占位说明，绝不编造分析**）；
+- **不覆盖内容不同的既有文件**（验收 D）：内容相同跳过、内容不同抛 `MarkdownConflict` 并保持原文件不变，
+  仅显式 `overwrite=True` 才改写；
+- 批量入口逐条隔离冲突与错误（AGENTS §2.7），冲突数在报告中单列。
+
+### 与 ARCHITECTURE §7 的两处差异（需记录，未自行扩张）
+
+1. **`tags` / `categories`**：§7 目标 frontmatter 含这两键，但 CanonicalBookmark **没有**这两个字段
+   （它们在 Field Theory 侧）。本实现**不写**这两键，避免凭空断言"无标签"。
+2. **`engagement` / `primary_category` / `folder_names`**：§7 称"保留为扩展键"，但 Canonical 同样没有，
+   且 Phase 4 不得依赖 FT 侧数据 → 无法生成，记录为 gap。

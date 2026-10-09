@@ -44,6 +44,45 @@
 
 ---
 
+## [Phase 4 · Step 2] 2026-10-09 — Markdown 投影（Canonical → 知识库 Markdown）
+
+### Added
+
+- `src/storage/markdown_projection.py` —— 落盘 `knowledge/X-Bookmarks/{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`：
+  - 路径布局**复用** `src.markdown.render.date_parts`，与 Phase 8 的 `assets/` 布局永不漂移；
+  - frontmatter **14 键**（tweet_id / author / author_username / author_id / created_at / source /
+    collector / collected_at / updated_at / content_hash / url / conversation_id / media_count / link_count），
+    按 **Canonical 决策 D2**：`author` = 显示名、`author_username` = handle；
+  - 正文两段式：`## Original Tweet`（可恢复原文 + 媒体/外链/引用/文章子段）+ `## AI Analysis`
+    （**仅占位说明，绝不编造分析内容**）；
+  - **不覆盖内容不同的既有文件**（验收 D）：内容相同则跳过（mtime 不变），内容不同抛 `MarkdownConflict`
+    且原文件保持不变，仅显式 `overwrite=True` 才改写；
+  - 原子写（同目录临时文件 + `fsync` + `os.replace`）、权限按 umask 收敛（0644）、无临时文件残留；
+  - 批量入口 `write_all_markdown` 逐条隔离冲突与错误（AGENTS §2.7），冲突数单列。
+- `src/storage/json_projection.py` 公开 `safe_tweet_id`（供 Markdown 投影复用同一套文件名安全规则）。
+- `tests/test_storage_markdown.py` —— **30 用例**：路径布局与回退、frontmatter 键序与 YAML 可解析、
+  D2 语义、两段式正文、AI 段无编造、可选子段按需渲染、不覆盖/不改写/显式改写、原子写与权限、
+  路径穿越拒绝、批量隔离。
+
+### Decided
+
+- **与 `ARCHITECTURE.md` §7 的两处差异（已记录，未自行扩张）**：
+  1. §7 目标 frontmatter 含 `tags` / `categories`，但 CanonicalBookmark 无此字段 → **不写**这两键，
+     避免凭空断言"无标签"；
+  2. §7 称保留 `engagement` / `primary_category` / `folder_names` 扩展键，但 Canonical 无此字段且
+     Phase 4 不得依赖 Field Theory 侧数据 → 无法生成，记为 gap。
+- §7 示例中的 `author: "username"` 属决策 D2 明确之前的旧写法；本实现按 **D2（author=显示名）** 处理。
+
+### Verified
+
+- `tests.test_storage_markdown`：**30/30 绿**；变异测试 **2/2 被捕获**（忽略不覆盖规则 → 7 个用例失败；
+  D2 语义互换 → 8 个用例失败）。
+- 全量回归：**592 用例 / 9 失败**，失败集 md5 `31571afa1164be8c7fda267cf6e53641` 与改动前一致 → 零回归。
+- 未写真实 `knowledge/`、`data/`（测试全用临时目录）；未联网；无新增第三方依赖
+  （测试用项目已依赖的 PyYAML 校验 frontmatter）。
+
+---
+
 ## [Phase 9 · 审计响应] 2026-10-09 — 外链层第三方审计：CFG-01 修复 + QA-01 文档更正
 
 > 来源：第三方《X-Bookmark-Knowledge 静态审计报告》（审计对象为 `src/external/` 外链抓取层）。

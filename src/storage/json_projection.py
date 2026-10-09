@@ -35,6 +35,7 @@ __all__ = [
     "JsonProjectionOutcome",
     "JsonProjectionReport",
     "normalized_path_for",
+    "safe_tweet_id",
     "write_all_canonical_json",
     "write_canonical_json",
 ]
@@ -99,6 +100,12 @@ class JsonProjectionReport:
     @property
     def ok(self) -> bool:
         return not self.failures
+
+
+def safe_tweet_id(value: Any) -> str:
+    """公开别名：校验 ``tweet_id`` 可安全用作文件名（Markdown 投影复用同一套规则）。"""
+
+    return _safe_tweet_id(value)
 
 
 def normalized_path_for(normalized_dir: str | os.PathLike[str], tweet_id: str) -> Path:

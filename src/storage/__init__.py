@@ -10,6 +10,16 @@
 不写 Markdown/知识库（由 :mod:`src.markdown` 负责）；所有写盘均为「先临时文件、后原子替换」。
 """
 
+from .markdown_projection import (
+    MarkdownConflict,
+    MarkdownProjectionError,
+    MarkdownProjectionOutcome,
+    MarkdownProjectionReport,
+    markdown_path_for,
+    render_markdown,
+    write_all_markdown,
+    write_markdown,
+)
 from .json_projection import (
     CanonicalJsonError,
     InvalidCanonicalBookmark,
@@ -22,10 +32,19 @@ from .json_projection import (
 
 __all__ = [
     "CanonicalJsonError",
+    "MarkdownConflict",
+    "MarkdownProjectionError",
+    "MarkdownProjectionOutcome",
+    "MarkdownProjectionReport",
+    "markdown_path_for",
+    "render_markdown",
+    "write_all_markdown",
+    "write_markdown",
     "InvalidCanonicalBookmark",
     "JsonProjectionOutcome",
     "JsonProjectionReport",
     "normalized_path_for",
+    "safe_tweet_id",
     "write_all_canonical_json",
     "write_canonical_json",
 ]

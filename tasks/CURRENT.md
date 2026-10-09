@@ -11,7 +11,7 @@
 | 1 | 架构设计 | ✅ 完成 | — |
 | 2 | Canonical Schema | ✅ 完成（28 用例绿，已提交 `498236a`） | — |
 | **3** | **Collector Adapter** | ✅ **实现完毕、已离线验收、已提交 `498236a`** | `PHASE-3-COLLECTOR-ADAPTER.md` |
-| **4** | **Storage** | 🔄 **进行中（Step 1/5 完成）** | `PHASE-4-STORAGE.md` |
+| **4** | **Storage** | 🔄 **进行中（Step 1–2/5 完成）** | `PHASE-4-STORAGE.md` |
 | 5 | CLI | ⏳ 待开始 | `PHASE-5-CLI.md` |
 | 6 | Cross Platform | ⏳ 待开始 | `PHASE-6-CROSS-PLATFORM.md` |
 | 7 | Git Sync | ⏳ 待开始 | `PHASE-7-GIT-SYNC.md` |
@@ -37,7 +37,17 @@
   - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网
   - 提交前独立审核：4/4 变异测试被捕获、AST 依赖边界断言、`schema` 键集合与输出完全一致（见 `docs/phase3-preflight-review.md` §10.7）
 
-## 当前 Phase 4 — Storage（进行中）
+## 当前 Phase 4 — Storage（进行中，Step 1–2 完成）
+
+- **Step 2 已完成**：`src/storage/markdown_projection.py` —— Markdown 投影
+  （`knowledge/X-Bookmarks/{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`）
+  - 布局复用 `src.markdown.render.date_parts`（与 Phase 8 assets 永不分叉）
+  - frontmatter 14 键（按 Canonical D2：author=显示名 / author_username=handle）
+  - 正文 `## Original Tweet` + `## AI Analysis`（仅占位，不编造分析）
+  - **不覆盖内容不同的既有文件**（冲突抛 `MarkdownConflict`，显式 overwrite 才改写）
+  - 测试 `tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 捕获；全量 592 用例失败集 md5 未变
+  - 与 ARCHITECTURE §7 的差异：不写 `tags`/`categories`（Canonical 无此字段），`engagement` 等同样记 gap
+- **Step 3–5 待续**：SQLite 索引（R6 两类字段）→ `rebuild-index` → 全量验收
 
 - **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
 - **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影
