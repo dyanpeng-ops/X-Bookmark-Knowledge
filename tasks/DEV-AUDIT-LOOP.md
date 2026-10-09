@@ -24,9 +24,13 @@
 
 | 产物 | 命名 | 存放位置 |
 |---|---|---|
-| 开发报告 | `X-Bookmark-Knowledge-<单元>-Report-<YYYY-MM-DD>.md`（新报告用此式；历史报告不改名） | Drive 文件夹 `x-bookmark-development report` |
-| 审计报告（外部产出，命名权在用户/审计方） | `X-Bookmark-Knowledge-<Phase>-Audit-<YYYY-MM-DD>.md` | Drive 文件夹 `x-bookmark-audit report` |
-| 报告源文件 | 同步一份到仓库 `docs/` | Git |
+| 开发报告（阶段完成） | `X-Bookmark-Knowledge-P<phase>-Report-<YYYY-MM-DD>.md` | Drive 文件夹 `x-bookmark-development report` |
+| 开发报告（阶段内分步） | `X-Bookmark-Knowledge-P<phase>-S<step>-Report-<YYYY-MM-DD>.md` | 同上 |
+| 审计报告（镜像命名） | 把上两式的 `Report` 换成 `Audit` | Drive 文件夹 `x-bookmark-audit report` |
+| 报告源文件 | 同步一份到仓库 `docs/`（**文件名与 Drive 完全一致**） | Git |
+
+> **编号以 Phase 序号为主键**（`P3` / `P4` / `P9`，分步加 `S1`/`S2`），审计方只需把 `Report` 改 `Audit`
+> 即得配对名。完整规则与**已产出报告登记表**见 `tasks/REPORTS.md`（每产出一份报告必须登记一行）。
 
 > 命名以「实际观察到的对方命名」为准：2026-10-09 审计方把 `X-Bookmark-Knowledge-Phase3-audit.md`
 > 原地改名为 `X-Bookmark-Knowledge-Phase3-Audit-2026-10-09.md`（**文件 ID 未变**、内容逐行一致，
