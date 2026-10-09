@@ -252,6 +252,12 @@ class LinkResolver:
             max_bytes=options.max_bytes,
             max_redirects=options.max_redirects,
             user_agent=options.user_agent,
+            # 审计 CFG-01：默认分支此前漏传这两个安全配置，导致 `external.allow_hosts`
+            # 与 `external.block_non_public_hosts` 在不注入 fetcher 时静默失效
+            # （白名单主机被误拦 / 关闭开关无效）。生产路径 `xbk links` 本就显式传参，
+            # 此处补齐以保证「配置 → 请求路径」在所有构造方式下一致。
+            block_non_public_hosts=options.block_non_public_hosts,
+            allow_hosts=options.allow_hosts,
         )
         self._handlers: Mapping[str, ContentHandler] = handlers or {}
         self._updater = updater

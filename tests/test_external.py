@@ -1305,6 +1305,43 @@ class ReviewFixTests(unittest.TestCase):
         with self.assertRaises(BlockedTargetError):
             fetcher("https://evil.example/x")
 
+    def test_link_resolver_default_fetcher_inherits_security_options(self):
+        """审计 CFG-01：不注入 fetcher 时，安全配置也必须生效（此前被静默丢弃）。
+
+        `LinkResolver` 拿得到 `options`，却曾漏传给默认构造的 `HttpFetcher`，导致
+        `external.allow_hosts` / `block_non_public_hosts` 在「不注入 fetcher」的调用方式下失效。
+        """
+
+        from src.config import load_external_options
+        from src.external.fetcher import HttpFetcher
+        from src.external.resolver import LinkResolver
+
+        options = load_external_options(
+            {"block_non_public_hosts": False, "allow_hosts": ["localhost"]}
+        )
+        with tempfile.TemporaryDirectory(prefix="xbook-resolver-cfg-") as tmp:
+            resolver = LinkResolver(Path(tmp), options=options)
+            fetcher = resolver._fetcher
+            self.assertIsInstance(fetcher, HttpFetcher)
+            self.assertFalse(fetcher.block_non_public_hosts)
+            self.assertEqual(fetcher.allow_hosts, ("localhost",))
+            # 行为验证（不触网、不做 DNS）：关闭开关后私网目标不再被拦
+            fetcher._guard("http://10.0.0.5/x")
+
+    def test_link_resolver_default_fetcher_keeps_strict_default(self):
+        """反向用例：默认配置下默认分支仍是最严格取值（防止未来把默认写反）。"""
+
+        from src.config import load_external_options
+        from src.external.fetcher import BlockedTargetError
+        from src.external.resolver import LinkResolver
+
+        with tempfile.TemporaryDirectory(prefix="xbook-resolver-cfg-") as tmp:
+            resolver = LinkResolver(Path(tmp), options=load_external_options({}))
+            self.assertTrue(resolver._fetcher.block_non_public_hosts)
+            self.assertEqual(resolver._fetcher.allow_hosts, ())
+            with self.assertRaises(BlockedTargetError):
+                resolver._fetcher._guard("http://10.0.0.5/x")
+
     def test_fetcher_rechecks_target_after_redirect(self):
         from src.external.fetcher import BlockedTargetError, HttpFetcher
 

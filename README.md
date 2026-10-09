@@ -165,7 +165,7 @@ python -m src.cli doctor
 >
 > **代码来源**：本项目已托管在**私有**仓库 `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git`；新机器 `git clone` 后从第 2 步继续（需要该账号登录或 PAT）。仓库**不含** `config/config.yaml`、`data/` 与书签内容。
 >
-> 测试运行方式：`.\\.venv\\Scripts\\python.exe -m unittest discover -s tests -t .`（**跑测试前须先获得用户批准**，见第 14 节）
+> 测试运行方式：macOS/Linux `.venv/bin/python -m unittest discover -s tests -t .`；Windows `.\.venv\Scripts\python.exe -m unittest discover -s tests -t .`（**跑测试前须先获得用户批准**，见第 14 节）
 
 ---
 
@@ -433,18 +433,27 @@ powershell -ExecutionPolicy Bypass -File scripts\uninstall-scheduler.ps1
 | 6 增量同步 + CLI | ✅ 完成（2026-09-16）：`src/config.py`（PyYAML）+ `src/ingest/` + `src/cli/`（sync/status/doctor）+ 60 用例；**M2 幂等达成** |
 | 7 逐条 Markdown 生成 | ✅ 完成（2026-09-17）：`src/markdown/`（render + writer）+ `process` 子命令 + 23 用例；**M3 达成**（真实 5 条，二次运行 `written: 0 / unchanged: 5`） |
 | 8 媒体本地化 | ✅ 完成（2026-09-20）：`src/media/localizer.py` + `media` 子命令 + 44 用例；6/6 真实媒体本地化、`media.local_path` 归一至知识库内、`## media` 引用本地相对路径（ADR-016） |
-| 9 外链正文抽取 | ✅ 实现完毕 + 复审关闭（2026-09-21）：fetcher + handlers + resolver + netguard（SSRF 逐跳防护），canonical 入库；94 用例经批准全绿。真实数据写运行与提交仍待批准（ADR-017/018） |
+| 9 外链正文抽取 | ✅ 实现完毕 + 复审关闭（2026-09-21）：fetcher + handlers + resolver + netguard（SSRF 逐跳防护），canonical 入库；94 用例经批准全绿。代码已提交（`78ed077`）；真实数据写运行仍待批准（ADR-017/018）。2026-10-09 依第三方审计修复 CFG-01（`LinkResolver` 默认分支漏传安全配置），SEC-01（DNS 重绑定）待决策 |
 | 10+ 完整性 / AI / 交接 / 调度 | ⏳ 未开始 |
 
 **当前实现的代码范围**：`src/database/`、`src/collector/`、`src/config.py`、`src/ingest/`、`src/markdown/`、`src/media/`、`src/external/`、`src/cli/`。`src/processor/`、`src/scheduler/` 仍只有包声明。
 
 **验证命令**
 
-```powershell
-cd D:\Users\label-workplace\Agent-Eval\AI-Agent-Lab\01_Knowledge-Agent\projects\X-Bookmark-Knowledge
-.\.venv\Scripts\python.exe -m unittest discover -s tests -t .
-# 最近一次通过：Ran 369 tests ... OK   (exit 0)   <- 2026-09-21，经批准运行（含 Phase 9 的 94 用例）
-# 注：`links --dry-run` 会发起真实 HTTP；Phase 9 的真实数据写运行（links、process、二次 links、sync 回归）仍待批准
+```bash
+# macOS / Linux（项目根目录）
+.venv/bin/python -m unittest discover -s tests -t .
+# Windows
+# .\.venv\Scripts\python.exe -m unittest discover -s tests -t .
+
+# 最近一次实测：2026-10-09 macOS，Ran 530 tests，9 failures
+#   - 9 个失败全部是**平台语义断言**（macOS 的 /var → /private/var 软链使 startswith(知识库根) 失败、
+#     Windows 盘符断言、机器环境变量），与业务代码无关，归 Phase 6 跨平台范畴。
+#   - 第三方在 Linux 沙箱复跑为 3 failures + 16 errors（其中 14 个 error 是沙箱 DNS 把 example.com
+#     解析到 198.18.11.198，被 netguard 正确拦截）。
+#   - 结论：**「失败数」不是可移植的验收口径**，Phase 6 必须重建分类基线（详见
+#     docs/phase3-preflight-review.md §10.8.3）。
+# 注：`links --dry-run` 会发起真实 HTTP；真实数据写运行仍待批准
 ```
 
 **日常运行**（采集 + 入库 + 媒体本地化 + 外链抓取 + Markdown；第二次执行 New 必须为 0）

@@ -9,6 +9,39 @@
 
 ---
 
+## [Phase 9 · 审计响应] 2026-10-09 — 外链层第三方审计：CFG-01 修复 + QA-01 文档更正
+
+> 来源：第三方《X-Bookmark-Knowledge 静态审计报告》（审计对象为 `src/external/` 外链抓取层）。
+> 该报告 3 项发现经本机逐条实测：**CFG-01 与 QA-01 成立并已修复**；
+> **SEC-01 属真实结构性缺口但修复需选择安全加固路线，待用户决策**，本轮不修。
+
+### Fixed
+
+- **CFG-01（配置一致性 bug）**：`LinkResolver.__init__` 默认构造 `HttpFetcher` 时漏传
+  `block_non_public_hosts` / `allow_hosts`，导致 `external.allow_hosts`（白名单主机被误拦）与
+  `external.block_non_public_hosts`（关闭开关无效）在「不注入 fetcher」的调用方式下静默失效。
+  生产路径 `xbk links` 通过 `_build_link_fetcher` 本就显式传参，故线上行为未受影响；
+  但该默认分支此前**零测试覆盖**（4 处测试构造全部注入 `fetcher=`）。修复：补齐两个参数，
+  新增 2 个回归用例（配置继承 + 默认仍严格的反向用例），行为验证不触网、不做 DNS。
+  注：漏传参数默认值恰是最严格侧，故该缺陷**不会放宽**安全策略，只会误拦白名单主机。
+- **QA-01（文档过期）**：`README.md` 声称「最近一次通过：Ran 369 tests … OK（2026-09-21）」，
+  与当前分支不符 → 更正为 **2026-10-09 macOS 实测 532 用例 / 9 个平台语义失败**，
+  并说明该口径不可跨平台移植（Linux 沙箱为 3 failures + 16 errors）；测试命令由 Windows-only
+  改为 macOS/Linux 与 Windows 双写法；同步把 Phase 9 行的「提交仍待批准」更正为已提交（`78ed077`）。
+
+### Deferred
+
+- **SEC-01（真实结构性缺口，待决策）**：`netguard.check_url_allowed` 用系统解析器校验 IP 后，
+  `UrllibTransport` 走标准 `urllib` → `socket.create_connection` **再次独立解析**，全程无 IP 绑定，
+  理论上存在 DNS rebinding / TOCTOU 窗口。每跳重定向**已**重新校验（审计建议 3 实际早已实现）。
+  彻底修复需改传输层（绑定已验证 IP 连接 + 保留 SNI/Host），属设计变更，需用户选定路线后再实施。
+
+### Notes
+
+- 本轮不做 Phase 9 验收状态变更；其单元测试实测 96 用例 / 1 个平台语义失败（同 macOS 口径）。
+
+---
+
 ## [Phase 3 · 跨平台改造] 2026-10-08 — Collector Adapter（RawCollectorData → CanonicalBookmark）
 
 > 状态：**实现完毕、已离线验收、通过提交前独立审核，并完成第三方审计回应（2026-10-09）**。
