@@ -9,8 +9,8 @@
 | --- | --- | --- | --- |
 | 0 | 架构审计 | ✅ 完成 | — |
 | 1 | 架构设计 | ✅ 完成 | — |
-| 2 | Canonical Schema | ✅ 完成（28 用例绿，未提交） | — |
-| **3** | **Collector Adapter** | ✅ **实现完毕、已离线验收（未提交）** | `PHASE-3-COLLECTOR-ADAPTER.md` |
+| 2 | Canonical Schema | ✅ 完成（28 用例绿，已提交 `498236a`） | — |
+| **3** | **Collector Adapter** | ✅ **实现完毕、已离线验收、已提交 `498236a`** | `PHASE-3-COLLECTOR-ADAPTER.md` |
 | 4 | Storage | ⏳ 待开始（**需老板授权**） | `PHASE-4-STORAGE.md` |
 | 5 | CLI | ⏳ 待开始 | `PHASE-5-CLI.md` |
 | 6 | Cross Platform | ⏳ 待开始 | `PHASE-6-CROSS-PLATFORM.md` |
@@ -34,20 +34,21 @@
   - 新模块 `python -m unittest tests.test_raw_data tests.test_fieldtheory_collector tests.test_normalizer` → **128 用例全绿**
   - 全量 `python -m unittest discover -s tests -t .` → 524 用例、**9 失败**（全在 `test_config`/`test_media`/`test_external` 的 Windows 路径语义，归 Phase 6）
   - 真实数据只读验收：`data/upstream` + `data/raw` → 5/5 `RawBookmarkItem` → 5/5 `CanonicalBookmark` → Schema 全通过（4 篇 Article、1 媒体、1 外链去重后）
-  - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网；未 Git 提交
+  - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网
+  - 提交前独立审核：4/4 变异测试被捕获、AST 依赖边界断言、`schema` 键集合与输出完全一致（见 `docs/phase3-preflight-review.md` §10.7）
 
 ## 关键状态
 
 - **真实数据已就位**（2026-10-08 从 Windows 包迁移）：`data/upstream/`（5 条 + 6 媒体）、`data/raw/`、`config/config.yaml`、`knowledge/X-Bookmarks/`（5 篇 md + 资产）。
 - **已知问题**：全量测试 9 失败，全为 Windows 语义平台断言，归 Phase 6。原记录为 11 个，Phase 6 需复核基线。
-- **未提交改动**：Phase 2 + Phase 3 交付物与文档更新，均在本地工作区（未 `git commit` / `push`）。
+- **提交状态**：Phase 2 + Phase 3 交付物已提交并推送 `origin/main`（`498236a`）。
 - **Phase 3 遗留 gap**（记录，不在本 Phase 修改）：`engagement` 无 Canonical 字段（留 payload）；
   `reply_to`/`thread` 无数据源（恒 `null`）；`quotedTweet` 形状待验证（真实样本均为 `null`）；
   `video`/`animated_gif` 未实测；非绝对 URI 外链被丢弃；`Collector` Protocol 仍含写上游的 `sync()`。
 
 ## 下一步（等老板指令）
 
-1. 复核 Phase 3 交付物 → 决定是否 `git commit`（本地提交 / 推送需显式授权）。
+1. ~~复核 Phase 3 交付物 → 提交~~：已完成（独立审核 + 提交 + 推送 `origin/main`）。
 2. 若进入 Phase 4（Storage）：先出「待验证清单」与实现计划，获批准后再动代码。
 3. Phase 6 启动前复核全量测试失败基线（9 vs 记录 11）。
 
