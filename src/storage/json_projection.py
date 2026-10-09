@@ -12,8 +12,9 @@
   避免中途崩溃留下半截 JSON；异常时清理临时文件。
 * **幂等**：目标文件已存在且 ``content_hash`` 与本次相同 → **不重写**（不动 mtime），
   满足「内容未变即跳过」的跨设备同步语义（验收 B）。
-* **路径安全**：``tweet_id`` 来自不可信上游，必须拒绝含路径分隔符 / ``..`` / 控制字符的取值，
+* **路径安全**：``tweet_id`` 来自不可信上游，必须拒绝含路径分隔符 / ``..`` / **控制字符**的取值，
   防止写出目录之外（验收 H）。
+* **文件权限**：新建文件按进程 umask 收敛（常见 0644），与仓库其它文件一致。
 * **单条隔离**：批量入口逐条 try/except，单条失败不中断整批（AGENTS §2.7，验收 F）。
 """
 
@@ -21,7 +22,6 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +41,11 @@ __all__ = [
 
 #: 文件名中禁止出现的字符（跨平台）：路径分隔符与 NUL。
 _FORBIDDEN_IN_NAME = ("/", "\\", "\x00")
+
+#: 新建文件的权限掩码基准：`os.open(..., 0o666)` 会再按进程 umask 收敛，
+#: 结果与仓库其它文件（常见 0644）一致；不使用 `tempfile.mkstemp`，因为它固定 0600，
+#: 会让 `data/normalized/*.json` 变成「仅属主可读」（自审 F1）。
+_FILE_CREATE_MODE = 0o666
 
 #: 序列化参数固定，保证同一 bookmark 产生**逐字节相同**的文件内容（确定性）。
 _DUMP_KWARGS: dict[str, Any] = {
@@ -154,7 +159,12 @@ def write_all_canonical_json(
 
 
 def _safe_tweet_id(value: Any) -> str:
-    """校验 tweet_id 可安全用作文件名（不可信输入）。"""
+    """校验 tweet_id 可安全用作文件名（不可信输入）。
+
+    拒绝：空/非字符串、首尾空白、路径分隔符与 NUL、**任何控制字符**（自审 F2：文档
+    原先声称拒绝控制字符，实现却只查 NUL，导致 `1\\n2.json` 这类文件名漏网）、
+    以 `.` 开头（避免隐藏文件与 `..`）。
+    """
 
     if not isinstance(value, str) or not value.strip():
         raise InvalidCanonicalBookmark(f"tweet_id must be a non-empty str, got {value!r}")
@@ -162,6 +172,11 @@ def _safe_tweet_id(value: Any) -> str:
         raise InvalidCanonicalBookmark(f"tweet_id must not have surrounding whitespace: {value!r}")
     if any(token in value for token in _FORBIDDEN_IN_NAME):
         raise InvalidCanonicalBookmark(f"tweet_id contains a path separator or NUL: {value!r}")
+    control = [ch for ch in value if ord(ch) < 0x20 or ord(ch) == 0x7F]
+    if control:
+        raise InvalidCanonicalBookmark(
+            f"tweet_id contains control characters {[hex(ord(ch)) for ch in control]}: {value!r}"
+        )
     if value.startswith(".") or value in {".", ".."}:
         raise InvalidCanonicalBookmark(f"tweet_id must not start with '.': {value!r}")
     return value
@@ -189,21 +204,37 @@ def _read_content_hash(path: Path) -> str | None:
 
 
 def _atomic_write_text(target: Path, text: str) -> None:
-    """同目录临时文件 + ``os.replace`` 原子替换；异常时清理临时文件。"""
+    """同目录临时文件 + ``os.replace`` 原子替换；异常时清理临时文件。
+
+    临时文件用 ``os.open(..., O_CREAT | O_EXCL, 0o666)`` 创建：既保证唯一
+    （``O_EXCL``）、又让权限按进程 umask 收敛（常见 0644），避免 ``tempfile.mkstemp``
+    固定 0600 导致最终文件「仅属主可读」（自审 F1）。
+    """
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(
-        prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent)
-    )
+    fd, tmp_path = _create_exclusive_temp(target)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_name, target)
+        os.replace(tmp_path, target)
     except BaseException:
         try:
-            os.unlink(tmp_name)
+            os.unlink(tmp_path)
         except OSError:  # pragma: no cover - 清理失败不掩盖原始异常
             pass
         raise
+
+
+def _create_exclusive_temp(target: Path) -> tuple[int, str]:
+    """在 ``target`` 同目录创建唯一临时文件，返回 ``(fd, 路径)``。"""
+
+    for attempt in range(64):
+        candidate = target.parent / f".{target.name}.{os.getpid()}.{attempt}.tmp"
+        try:
+            fd = os.open(str(candidate), os.O_WRONLY | os.O_CREAT | os.O_EXCL, _FILE_CREATE_MODE)
+        except FileExistsError:
+            continue
+        return fd, str(candidate)
+    raise CanonicalJsonError(f"cannot create a temporary file next to {target}")

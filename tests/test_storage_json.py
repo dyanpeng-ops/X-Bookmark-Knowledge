@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import sys
 import tempfile
 import unittest
@@ -169,6 +170,34 @@ class ValidationTests(JsonProjectionTestCase):
     def test_non_mapping_is_rejected(self):
         with self.assertRaises(InvalidCanonicalBookmark):
             write_canonical_json("not-a-bookmark", self.out_dir)  # type: ignore[arg-type]
+
+
+class SelfAuditFindingsTests(JsonProjectionTestCase):
+    """Step 1 自审发现的两项缺陷回归（审计前自查，2026-10-09）。"""
+
+    def test_written_file_mode_follows_umask_not_0600(self):
+        """F1：mkstemp 固定 0600 会让 normalized JSON 变成仅属主可读。"""
+
+        write_canonical_json(bookmark(), self.out_dir)
+        umask = os.umask(0)
+        os.umask(umask)
+        expected = 0o666 & ~umask
+        actual = stat.S_IMODE(os.stat(self.target()).st_mode)
+        self.assertEqual(oct(actual), oct(expected))
+        # 常规 umask（022/002）下必须至少 group/other 可读，不得是 0600
+        if umask & 0o077 != 0o077:
+            self.assertNotEqual(oct(actual), oct(0o600))
+
+    def test_control_characters_in_tweet_id_are_rejected(self):
+        """F2：文档声称拒绝控制字符，实现原先只查 NUL——`1\\n2.json` 曾漏网。"""
+
+        for value in ("1\n2", "1\t2", "1\r2", "1\x1f2", "1\x7f2"):
+            with self.subTest(tweet_id=value):
+                with self.assertRaises(InvalidCanonicalBookmark):
+                    write_canonical_json(bookmark(tweet_id=value), self.out_dir)
+        # 被拒后不得留下任何文件（目录可能压根没被创建）
+        leftovers = list(self.out_dir.iterdir()) if self.out_dir.exists() else []
+        self.assertEqual(leftovers, [])
 
 
 class PathSafetyTests(JsonProjectionTestCase):
