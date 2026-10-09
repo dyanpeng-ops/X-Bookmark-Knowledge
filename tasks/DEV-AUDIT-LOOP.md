@@ -24,9 +24,14 @@
 
 | 产物 | 命名 | 存放位置 |
 |---|---|---|
-| 开发报告 | `X-Bookmark-Knowledge-<单元>-report.md` | Drive 文件夹 `x-bookmark-development report` |
-| 审计报告（外部产出） | `X-Bookmark-Knowledge-<单元>-audit.md` | Drive 文件夹 `x-bookmark-audit report` |
+| 开发报告 | `X-Bookmark-Knowledge-<单元>-Report-<YYYY-MM-DD>.md`（新报告用此式；历史报告不改名） | Drive 文件夹 `x-bookmark-development report` |
+| 审计报告（外部产出，命名权在用户/审计方） | `X-Bookmark-Knowledge-<Phase>-Audit-<YYYY-MM-DD>.md` | Drive 文件夹 `x-bookmark-audit report` |
 | 报告源文件 | 同步一份到仓库 `docs/` | Git |
+
+> 命名以「实际观察到的对方命名」为准：2026-10-09 审计方把 `X-Bookmark-Knowledge-Phase3-audit.md`
+> 原地改名为 `X-Bookmark-Knowledge-Phase3-Audit-2026-10-09.md`（**文件 ID 未变**、内容逐行一致，
+> 已用预览正文 diff 验证）。**识别审计报告一律以「文件 ID 是否出现过」为准，不靠文件名**——
+> 改名会刷新 Drive 的 modifiedTime，仅凭时间戳会误判为「有新审计」。
 
 - 生产目录：`/Users/nanopeng/AI-Agent-Lab/x-bookmark-audit/`
 - Drive 文件夹（Google 账号 `u/1`；**ID 为准**，名称仅作识别）：
