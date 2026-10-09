@@ -9,6 +9,41 @@
 
 ---
 
+## [Phase 4 · 跨平台改造] 2026-10-09 — Storage（**进行中**，Step 1/5 完成）
+
+> 状态：**实施中**。任务书 `tasks/PHASE-4-STORAGE.md`（含 5 个 Step 与验收 A–H）。
+> 目标：CanonicalBookmark → 三种地位对等的投影（Markdown / JSON / SQLite 索引）+ `rebuild-index`。
+
+### Added
+
+- `src/storage/`（新增包，ARCHITECTURE §13 指定位置）+ `src/storage/json_projection.py`
+  —— **Step 1：Canonical JSON 投影**，落盘 `data/normalized/{tweet_id}.json`：
+  - 写盘前强制 `validate_bookmark`，保证磁盘内容永远合法；
+  - **原子写**（同目录临时文件 → `fsync` → `os.replace`），异常时清理临时文件，不留半截 JSON；
+  - **幂等**：目标文件 `content_hash` 未变则**不重写**（mtime 不变），服务于跨设备同步；
+  - **路径穿越防护**：`tweet_id` 来自不可信上游，拒绝路径分隔符 / NUL / 首字符 `.` / 前后空白；
+  - **单条失败隔离**（AGENTS §2.7）：批量入口 `write_all_canonical_json` 逐条 try/except，
+    返回 `JsonProjectionReport`（成功明细 + 失败清单），单条坏数据不中断整批；
+  - 序列化确定性（`ensure_ascii=False` / `sort_keys=True` / 固定缩进 + 结尾换行）。
+- `tests/test_storage_json.py` —— **24 用例**：路径布局、原子写、幂等、损坏文件重写、
+  非法 Canonical 拒绝、危险 `tweet_id` 拒绝、批量隔离、`os.replace` 失败不留残留。
+
+### Decided
+
+- **待用户决策 R1**：新建 `src/storage/` 与既有 `src/ingest` / `src/markdown` / `src/database`
+  **并存**（增量演进，不破坏既有 500+ 测试）还是**原地替换**（更干净但会大面积破坏既有测试）。
+  ARCHITECTURE §14 定义为「移 + 改」，未规定顺序与回滚方式 → 属架构取舍，开发方不自行决定。
+
+### Verified
+
+- `tests.test_storage_json`：24/24 绿；变异测试 2/2 被捕获（幂等读哈希失效 → 2 失败；路径安全失效 → 15 失败）。
+- 端到端（真实数据**只读**、落盘临时目录）：5 条 JSONL → 规范化 5/5 → 落盘 5/5；
+  **二次运行 0 写 / 5 跳过**（幂等实证）；样例 19 键、`content_hash` 与 Phase 3 验收一致。
+- 全量回归：**556 用例 / 9 失败**，失败集与上一轮**逐条一致**（平台语义，归 Phase 6）→ 零新增回归。
+- 未写真实 `data/`、`knowledge/`；未联网；无新增第三方依赖。
+
+---
+
 ## [Phase 9 · 审计响应] 2026-10-09 — 外链层第三方审计：CFG-01 修复 + QA-01 文档更正
 
 > 来源：第三方《X-Bookmark-Knowledge 静态审计报告》（审计对象为 `src/external/` 外链抓取层）。

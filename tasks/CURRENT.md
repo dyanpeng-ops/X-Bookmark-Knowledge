@@ -11,7 +11,7 @@
 | 1 | 架构设计 | ✅ 完成 | — |
 | 2 | Canonical Schema | ✅ 完成（28 用例绿，已提交 `498236a`） | — |
 | **3** | **Collector Adapter** | ✅ **实现完毕、已离线验收、已提交 `498236a`** | `PHASE-3-COLLECTOR-ADAPTER.md` |
-| 4 | Storage | ⏳ 待开始（**需老板授权**） | `PHASE-4-STORAGE.md` |
+| **4** | **Storage** | 🔄 **进行中（Step 1/5 完成）** | `PHASE-4-STORAGE.md` |
 | 5 | CLI | ⏳ 待开始 | `PHASE-5-CLI.md` |
 | 6 | Cross Platform | ⏳ 待开始 | `PHASE-6-CROSS-PLATFORM.md` |
 | 7 | Git Sync | ⏳ 待开始 | `PHASE-7-GIT-SYNC.md` |
@@ -36,6 +36,17 @@
   - 真实数据只读验收：`data/upstream` + `data/raw` → 5/5 `RawBookmarkItem` → 5/5 `CanonicalBookmark` → Schema 全通过（4 篇 Article、1 媒体、1 外链去重后）
   - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网
   - 提交前独立审核：4/4 变异测试被捕获、AST 依赖边界断言、`schema` 键集合与输出完全一致（见 `docs/phase3-preflight-review.md` §10.7）
+
+## 当前 Phase 4 — Storage（进行中）
+
+- **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
+- **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影
+  （`data/normalized/{tweet_id}.json`）；原子写 + content_hash 幂等 + 路径穿越防护 + 单条失败隔离
+  - 测试：`tests/test_storage_json.py` **24 用例全绿**；变异测试 2/2 被捕获
+  - 端到端：5 条真实数据（只读）→ 规范化 → 临时目录落盘 **5/5**；二次运行 **0 写 / 5 跳过**（幂等实证）
+- **Step 2–5 待续**：Markdown 投影 → SQLite 索引（R6 两类字段）→ `rebuild-index` → 全量验收
+- **待用户决策 R1**：新建 `src/storage/` 与既有 `src/ingest`/`src/markdown`/`src/database`
+  **并存**（增量、不破坏 500+ 既有测试）还是**原地替换**（更干净但大面积破坏既有测试）
 
 ## 关键状态
 
