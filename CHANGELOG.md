@@ -11,9 +11,9 @@
 
 ## [Phase 3 · 跨平台改造] 2026-10-08 — Collector Adapter（RawCollectorData → CanonicalBookmark）
 
-> 状态：**实现完毕、已离线验收并通过提交前独立审核**。新增 128 用例全绿；5 条真实数据只读转换
-> 5/5 通过 Schema 校验（经老板批准执行，见 `AGENTS.md` §16/§17）。
-> 决策、修正与审核记录见 `docs/phase3-preflight-review.md` §10。
+> 状态：**实现完毕、已离线验收、通过提交前独立审核，并完成第三方审计回应（2026-10-09）**。
+> 新增 133 用例全绿；5 条真实数据只读转换 5/5 通过 Schema 校验（经老板批准执行，见 `AGENTS.md` §16/§17）。
+> 决策、修正、审核与审计回应见 `docs/phase3-preflight-review.md` §10。
 > **未修改 Schema**、未写 `data/`/`knowledge/`、未联网、未提交 Git。
 > **零新增第三方依赖**（全部标准库；本机 `.venv` 仅 `pyyaml`，测试用 `unittest`）。
 
@@ -29,7 +29,7 @@
 - `src/normalizer/` — `FieldTheoryNormalizer`（`RawCollectorData → CanonicalBookmark` dict，直接对接
   `canonical.validate`）、`compute_content_hash()`（`ARCHITECTURE.md` §5.4 九项）、
   `errors.py`（`NormalizationError` + 任务书 §16 六类错误映射表）。
-- `tests/test_raw_data.py`（20）、`tests/test_fieldtheory_collector.py`（21）、`tests/test_normalizer.py`（87）
+- `tests/test_raw_data.py`（21）、`tests/test_fieldtheory_collector.py`（23）、`tests/test_normalizer.py`（89）
   — 覆盖任务书 §18 Test A–L，含「Canonical 输出恰好 19 键」「FT 专属字段不泄漏」「非 URI 外链丢弃」
   「Article-only links 过滤」「外链保序去重」「幂等」「`content_hash` 排除元数据/engagement」
   以及基于 **AST** 的依赖边界断言与「屏蔽进程/网络后仍跑通」的行为断言（提交前审核补充）。
@@ -46,6 +46,16 @@
 - 预检评审中 `content_hash` 覆盖范围由「…等」更正为 `ARCHITECTURE.md` §5.4 确定的九项
   （原描述漏了 `author_id`/`created_at`/`quoted_tweet`/`x_article.text`）。
 - 预检评审「`collected_at` 取 now()」与 Test L（幂等）的矛盾：改为取 `payload.syncedAt`，输出确定性。
+- **[A1，第三方审计，本机实测证实] 非 UTF-8 富化快照会拖垮整批**：`_read_enrichment` 原先只捕
+  `(OSError, json.JSONDecodeError)`，`read_text` 遇非 UTF-8 字节抛出的 `UnicodeDecodeError`
+  会穿透 `collect()` 中断整批，**违反 AGENTS §2.7「单条失败不得拖垮整批」**。改为捕获
+  `(OSError, ValueError)` 并统一转 `UpstreamContractError`，由 `strict` 决定降级或抛错（+2 回归用例）。
+- **[A2]** `_iso_utc` 只认大写 `Z`：ISO-8601 合法的小写 `z` 后缀被误拒；改为大小写不敏感（+1 用例）。
+- **[A3]** `tweet_id` 文档称「纯数字字符串」但实现只校验非空：**改文档**（放宽为「非空稳定身份字符串」，
+  以容纳未来 SaveBox / X API / 人工导入采集器），不加 `isdigit()`（+1 用例钉住行为）。
+- **[A4]** `compute_content_hash`（公开 API）传缺键 dict 时抛裸 `KeyError`：改为前置校验并抛
+  `NormalizationError`（+1 用例）。
+- **[A5]** `typing.Sequence` 用于 `isinstance` → 改用 `collections.abc.Sequence` / `Mapping`（风格，无行为变化）。
 
 ### Decided
 
@@ -64,8 +74,16 @@
 - `quotedTweet` **形状待验证**（真实 5 条 + fixtures 均为 `null`，无实测非空样本）；
   `video`/`animated_gif` media 未实测。
 - 非绝对 URI 外链被丢弃（记 gap）；`Collector` Protocol 仍含写上游的 `sync()`（未来可拆只读 Protocol）。
-- 全量测试 9 个失败（`test_config`/`test_media`/`test_external` 的 Windows 路径语义），归 Phase 6；
-  与 `PLAN.md` 原记录「11 个」不一致，需在 Phase 6 复核基线。
+- **S2（第三方审计）：`FieldTheoryCollector` 未形式化满足 `Collector` Protocol**（只实现
+  `check_ready` + `collect`，故意不暴露会写上游的 `sync`/`read_bookmarks`）。当前靠鸭子类型、仓库内无
+  `isinstance(x, Collector)`，无实际破坏；**须在 Phase 4 开工前做架构决策**（拆 `ReadOnlyCollector`
+  Protocol，或显式实现完整接口）。
+- **S1（第三方审计）：跨平台验收基线不存在**。本机 macOS 全量 530 用例 / 9 失败（平台语义）；
+  第三方 Linux 沙箱复跑为 3 失败 + 16 错误（其中 14 个 `test_external` 错误是沙箱 DNS 把
+  `example.com` 解析到 `198.18.11.198` 触发 `netguard` 正确拦截）。**「N 个失败」不能作为 Phase 4
+  回归口径**，Phase 6 必须重建分类基线（网络敏感 / 平台语义 / 真实缺陷）。详见
+  `docs/phase3-preflight-review.md` §10.8.3。
+- A7：`quoted_tweet` 非空形状与 `video`/`animated_gif` media 待真实样本补测。
 
 ---
 

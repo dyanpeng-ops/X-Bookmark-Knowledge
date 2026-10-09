@@ -147,9 +147,13 @@ class FieldTheoryCollector:
             return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
+            # ValueError 覆盖 json.JSONDecodeError 与 UnicodeDecodeError（非 UTF-8 字节）。
+            # 审计 A1：只捕 OSError 会让 UnicodeDecodeError 穿透 collect()，违反
+            # AGENTS §2.7「单条失败不拖垮整批」——此处统一转成契约错误，由 collect()
+            # 按 strict 决定「降级 + 记 warning」还是「直接抛错」。
             raise UpstreamContractError(
-                f"{path}: unreadable enrichment snapshot ({exc})"
+                f"{path}: unreadable enrichment snapshot ({type(exc).__name__}: {exc})"
             ) from exc
         if not isinstance(payload, Mapping):
             raise UpstreamContractError(

@@ -2,7 +2,7 @@
 
 > 项目：X Bookmark Knowledge Pipeline
 > 项目根：`/Users/nanopeng/AI-Agent-Lab/X-Bookmark-Knowledge/`（macOS）
-> 最后更新：2026-10-08（跨平台改造 Phase 3 实现完毕并离线验收：RawCollectorData + FieldTheoryCollector + FieldTheoryNormalizer，128 用例绿）
+> 最后更新：2026-10-08（跨平台改造 Phase 3 实现完毕并离线验收：RawCollectorData + FieldTheoryCollector + FieldTheoryNormalizer，133 用例绿）
 
 > **跨平台改造说明（2026-10-07 起）**：本项目已从「Windows-only、fieldtheory 附属」重构为
 > 「跨平台、Collector 可替换、Canonical Data 稳定」的分层架构。旧 Phase 0–9 的验收记录（含
@@ -17,10 +17,10 @@
 | 项 | 值 |
 | --- | --- |
 | 改造进度 | Phase 0（审计）✅ → Phase 1（架构设计）✅ → Phase 2（Schema）✅ → **Phase 3（Collector Adapter）✅ 实现完毕并离线验收** → Phase 4（Storage）待授权 |
-| 当前阶段 | **Phase 3 完成（已提交 `498236a`）**：`src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + 3 个测试文件（128 用例绿）；5 条真实数据只读转换 5/5 通过 Schema |
+| 当前阶段 | **Phase 3 完成（已提交 `498236a`）**：`src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + 3 个测试文件（133 用例绿；含 5 个第三方审计回归用例）；5 条真实数据只读转换 5/5 通过 Schema |
 | 技术路线 | Collector 可替换（Protocol + registry + 配置驱动）；CanonicalBookmark 为统一标准；SQLite 降级为可重建索引 |
 | 真实数据 | 已从 Windows 包迁移到 `data/`（upstream/raw/state/logs）与 `knowledge/X-Bookmarks/`（5 篇 md + 媒体），`config/config.yaml` 就位 |
-| 已知问题 | 全量测试 9 个失败（原记录 11 个，需在 Phase 6 复核），均为 Windows 语义平台断言（盘符 `Z:/C:`、路径分隔、`/var` 软链、机器环境变量），属 Phase 6 跨平台范畴，非代码 bug |
+| 已知问题 | 全量测试**本机 macOS** 9 个失败（`test_config` 4 / `test_media` 3 / `test_external` 2），均为平台语义（macOS `/var`→`/private/var` 软链、盘符、机器环境变量），非代码 bug；**第三方 Linux 审计复跑为 3 失败 + 16 错误**（口径不可跨平台复现）→ Phase 6 必须重建分类基线，详见 `docs/phase3-preflight-review.md` §10.8.3 |
 
 ---
 
@@ -31,7 +31,7 @@
 | 0 | 架构审计 | ✅ 完成 | `docs/CURRENT_ARCHITECTURE.md` |
 | 1 | 架构设计 | ✅ 完成 | `ARCHITECTURE.md`（六层架构 + 决策 R1–R7） |
 | 2 | Canonical Schema | ✅ 完成（2026-10-08） | `schema/bookmark.schema.json` + `src/canonical/validate.py` + `tests/test_schema.py`（28 用例） |
-| 3 | Collector Adapter | ✅ 完成（2026-10-08，已提交 `498236a`） | `src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + `tests/test_{raw_data,fieldtheory_collector,normalizer}.py`（128 用例） |
+| 3 | Collector Adapter | ✅ 完成（2026-10-08，已提交 `498236a`） | `src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + `tests/test_{raw_data,fieldtheory_collector,normalizer}.py`（133 用例） |
 | 4 | Storage | ⏳ 待开始 | Markdown / JSON / SQLite 索引 + `rebuild-index` |
 | 5 | CLI | ⏳ 待开始 | `xbk` 入口 + 命令对齐 |
 | 6 | Cross Platform | ⏳ 待开始 | Windows + macOS 验证（修复 9 个平台断言，需先复核基线数字） |

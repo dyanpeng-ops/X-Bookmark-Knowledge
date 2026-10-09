@@ -25,13 +25,13 @@
   - 新增 `src/collector/raw_data.py`（冻结契约 + `RawDataContractError`）
   - 新增 `src/collector/fieldtheory/{__init__,adapter}.py`（`FieldTheoryCollector`）
   - 新增 `src/normalizer/{__init__,errors,fieldtheory}.py`（`FieldTheoryNormalizer` + `compute_content_hash`）
-  - 新增 `tests/test_raw_data.py`（20）、`tests/test_fieldtheory_collector.py`（21）、`tests/test_normalizer.py`（87）
+  - 新增 `tests/test_raw_data.py`（21）、`tests/test_fieldtheory_collector.py`（23）、`tests/test_normalizer.py`（89）
   - 修改 `src/collector/base.py`（`Collector` Protocol 增 `collect()`，+12 行）
   - 文档：`docs/phase3-preflight-review.md` 追加「决策与修正记录」；`PLAN.md` / `CHANGELOG.md` 同步
 - **五项决策**（见 `docs/phase3-preflight-review.md` §10.1）：dict 输出 / content_hash 按 §5.4 九项 /
   新建 `fieldtheory/` 包且旧 adapter 不动 / 富化取 `data/raw/` / 时间戳取 `syncedAt`。
 - **验收证据**（2026-10-08，全部离线）：
-  - 新模块 `python -m unittest tests.test_raw_data tests.test_fieldtheory_collector tests.test_normalizer` → **128 用例全绿**
+  - 新模块 `python -m unittest tests.test_raw_data tests.test_fieldtheory_collector tests.test_normalizer` → **133 用例全绿**
   - 全量 `python -m unittest discover -s tests -t .` → 524 用例、**9 失败**（全在 `test_config`/`test_media`/`test_external` 的 Windows 路径语义，归 Phase 6）
   - 真实数据只读验收：`data/upstream` + `data/raw` → 5/5 `RawBookmarkItem` → 5/5 `CanonicalBookmark` → Schema 全通过（4 篇 Article、1 媒体、1 外链去重后）
   - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网
@@ -40,8 +40,9 @@
 ## 关键状态
 
 - **真实数据已就位**（2026-10-08 从 Windows 包迁移）：`data/upstream/`（5 条 + 6 媒体）、`data/raw/`、`config/config.yaml`、`knowledge/X-Bookmarks/`（5 篇 md + 资产）。
-- **已知问题**：全量测试 9 失败，全为 Windows 语义平台断言，归 Phase 6。原记录为 11 个，Phase 6 需复核基线。
+- **已知问题**：全量测试本机 macOS 9 失败（平台语义，非代码 bug）；第三方 Linux 审计复跑为 3 失败 + 16 错误 → **基线口径不可跨平台复现**，Phase 6 必须重建分类基线（见 `docs/phase3-preflight-review.md` §10.8.3）。
 - **提交状态**：Phase 2 + Phase 3 交付物已提交并推送 `origin/main`（`498236a`）。
+- **Phase 3 已完成第三方审计回应**（2026-10-09）：A1（非 UTF-8 快照拖垮整批，违反 AGENTS §2.7）+ A2/A3/A4/A5 已修复并补 5 个回归用例；S2（Protocol 债务）留待 Phase 4 前架构决策（见 `docs/phase3-preflight-review.md` §10.8）。
 - **Phase 3 遗留 gap**（记录，不在本 Phase 修改）：`engagement` 无 Canonical 字段（留 payload）；
   `reply_to`/`thread` 无数据源（恒 `null`）；`quotedTweet` 形状待验证（真实样本均为 `null`）；
   `video`/`animated_gif` 未实测；非绝对 URI 外链被丢弃；`Collector` Protocol 仍含写上游的 `sync()`。

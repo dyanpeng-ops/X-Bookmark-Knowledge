@@ -193,6 +193,23 @@ class PerItemResilienceTests(CollectorTestCase):
         self.assertEqual(len(collector.collect().items), 3)
         self.assertEqual(len(collector.last_warnings), 1)
 
+    def test_non_utf8_snapshot_is_isolated(self):
+        # 审计 A1 回归：UnicodeDecodeError 曾穿透 collect()，整批被拖垮。
+        path = self.raw_dir / f"{SAMPLE_IDS[1]}.json"
+        path.write_bytes(b'{"enrichment": {"articleText": "\xff\xfe not utf-8"}}')
+        collector = self.make_collector()
+        data = collector.collect()
+        self.assertEqual(len(data.items), 3)
+        self.assertIsNone(data.items[1].enrichment)
+        self.assertEqual(len(collector.last_warnings), 1)
+        self.assertIn("UnicodeDecodeError", collector.last_warnings[0])
+
+    def test_non_utf8_snapshot_raises_in_strict_mode(self):
+        path = self.raw_dir / f"{SAMPLE_IDS[1]}.json"
+        path.write_bytes(b'{"enrichment": {"articleText": "\xff\xfe not utf-8"}}')
+        with self.assertRaises(UpstreamContractError):
+            self.make_collector(strict=True).collect()
+
     def test_strict_mode_raises_instead(self):
         self.write_snapshot(SAMPLE_IDS[1], "{not json}")
         with self.assertRaises(UpstreamContractError):

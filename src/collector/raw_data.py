@@ -26,7 +26,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 __all__ = [
     "RawDataContractError",
@@ -51,7 +52,9 @@ def _is_nonempty_str(value: Any) -> bool:
 class RawBookmarkItem:
     """一条由 Collector 读出的原始书签。
 
-    :param tweet_id: X 推文 ID（纯数字字符串），跨采集器的稳定身份。
+    :param tweet_id: 跨采集器的稳定身份字符串。契约**只要求非空字符串**——
+        X 推文 ID 是纯数字，但本契约不强制 ``isdigit()``，以便未来接入
+        SaveBox / X API / 人工导入等采集器（审计 A3：文档与实现对齐）。
     :param payload: Field Theory ``bookmarks.jsonl`` 原始记录（camelCase 原样保留）。
     :param enrichment: 可选富化块（Article / quotedTweet 等），来自上游
         ``list|show --json`` 的产物；结构同样保持原始 camelCase，不做 snake_case 化。

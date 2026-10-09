@@ -226,7 +226,7 @@ class RawCollectorData:
 | 项 | 命令 / 方式 | 结果 |
 |---|---|---|
 | 新模块单测 | `python -m unittest tests.test_raw_data tests.test_fieldtheory_collector tests.test_normalizer` | **127 用例全绿**（20 + 21 + 86；审核后为 128，见 §10.7），覆盖 Test A–L |
-| 全量回归 | `python -m unittest discover -s tests -t .` | 524 用例，**9 失败**，全部位于 `tests/test_config.py` / `test_media.py` / `test_external.py` 的 Windows 路径语义断言，与本 Phase 文件无交集（归 Phase 6）。注：`tasks/CURRENT.md` 原记录为「11 失败」，数字与新基线不一致，需在 Phase 6 更新 |
+| 全量回归 | `python -m unittest discover -s tests -t .` | 524 用例，**9 失败**（**本机 macOS 口径**，跨平台不可复现，见 §10.8.3），全部位于 `tests/test_config.py` / `test_media.py` / `test_external.py` 的 Windows 路径语义断言，与本 Phase 文件无交集（归 Phase 6）。注：`tasks/CURRENT.md` 原记录为「11 失败」，数字与新基线不一致，需在 Phase 6 更新 |
 | 真实数据只读验收 | `FieldTheoryCollector(data_dir=data/upstream, raw_dir=data/raw).collect()` → `normalize_and_validate()` | **5/5 RawBookmarkItem → 5/5 CanonicalBookmark → validate 全通过**；富化 5/5 命中；4 篇 Article；1 条媒体；1 条外链（原 2 条重复去重）；4 条 Article-only `links` 过滤后 `external_links = []`（符合预期） |
 | 写盘影响 | `git status` | 未新增/修改 `data/`、`knowledge/`、`schema/`、`config/`；唯一被改的既有源码为 `src/collector/base.py` |
 
@@ -260,7 +260,7 @@ class RawCollectorData:
 | 变异测试（破坏实现看测试是否失败） | 4/4 被捕获：`content_hash` 恒常量→9 失败；Article 过滤失效→2；外链不去重→6；media 校验失效→9。**测试非空断言** |
 | `schema.properties`（19）↔ Normalizer 输出键集合 | 完全相等；12 个必填全部存在；`mediaObject` 嵌套键集合与 `$defs` 完全一致 |
 | 真实数据端到端复验（最终代码） | 5/5 items → 5/5 CanonicalBookmark，19 键齐备 |
-| 全量回归 | 525 用例 / 9 失败，失败集与提交前基线一致（Windows 路径语义，归 Phase 6） |
+| 全量回归 | 525 用例 / 9 失败，失败集与提交前基线一致（**本机 macOS 口径**，平台语义，归 Phase 6；跨平台基线问题见 §10.8.3） |
 | 是否存在 `isinstance(x, Collector)` 依赖 | 无（故 Protocol 增 `collect()` 不影响既有代码） |
 | 敏感信息 | 待提交文件中仅出现 Cookie **字段名**（既有文档描述），无任何值；`config/config.yaml`、`data/`、`knowledge/*` 均被 ignore |
 
@@ -281,4 +281,51 @@ class RawCollectorData:
 3. 未发现字段映射错误、键集合漂移、写盘/联网行为或对既有 Phase 5 代码的破坏。
 
 审核后用例数由 127 增至 **128**（`test_normalizer` 86 → 87）。
+
+## 10.8 第三方 Phase 3 审计回应与修复记录（2026-10-09）
+
+第三份**外部**审计报告（只读、独立复跑，结论「通过，质量高于平均水平」）提出 2 项严重级（S1/S2）
+与 8 项建议（A1–A8）。本节的每条都在本机用代码实测过（不是照单接受），全部为只读取证。
+
+### 10.8.1 已确认并修复（A1–A5）
+
+| 编号 | 审计说法 | 本机实测 | 处置 |
+|---|---|---|---|
+| **A1** | `_read_enrichment` 未捕 `UnicodeDecodeError`，会穿透 `collect()` | **证实为真 bug**：非 UTF-8 快照 → `UnicodeDecodeError` 逃出 `collect()`，整批中断，**违反 AGENTS §2.7「单条失败不拖垮整批」**与本文档的承诺 | 捕获范围由 `(OSError, json.JSONDecodeError)` 改为 `(OSError, ValueError)`（后者覆盖 `UnicodeDecodeError` 与 `JSONDecodeError`），统一转 `UpstreamContractError`，由 `strict` 决定降级或抛错。新增 2 个回归测试 |
+| **A2** | `_iso_utc` 只认大写 `Z` | 证实：小写 `z`（ISO-8601 合法）抛 `NormalizationError` | 改为 `value[-1:] in ("Z", "z")`；新增回归测试 |
+| **A3** | `tweet_id` 文档称「纯数字」但实现只校验非空 | 证实（`tweet_id="abc-not-numeric"` 被接受） | **改文档而非加 `isdigit()`**：契约层面放宽为「非空稳定身份字符串」，以容纳 SaveBox / X API / 人工导入等未来采集器。新增测试钉住该行为 |
+| **A4** | `compute_content_hash` 公开 API 缺键时抛裸 `KeyError` | 证实（`KeyError: 'tweet_id'`） | 增加 `_HASH_REQUIRED_FIELDS` 前置校验，抛 `NormalizationError`；新增回归测试 |
+| **A5** | `typing.Sequence` 用于 `isinstance`，推荐 `collections.abc` | 证实（`typing.Sequence` 在 3.13 可用，仅风格） | `raw_data.py` / `normalizer/fieldtheory.py` 改用 `collections.abc.Sequence` / `Mapping` |
+
+修复后：Phase 3 模块 **133 用例全绿**（原 128 + 5 个回归用例）；真实数据 5/5 仍全通过。
+
+### 10.8.2 接受但本轮不修（附理由）
+
+| 编号 | 内容 | 处置理由 |
+|---|---|---|
+| **S2** | `FieldTheoryCollector` 只实现 `check_ready` + `collect`，未形式化满足 `Collector` Protocol（缺 `sync` / `read_bookmarks`） | **需要架构决策**（拆 `ReadOnlyCollector` Protocol vs 显式实现完整接口）。Phase 3 故意不暴露会写上游的 `sync()`（AGENTS §17），故不擅自扩宽。建议在 **Phase 4 开工前**决策 |
+| **A6** | `import src.normalizer` 连带加载 Phase 5 适配器模块 | 已在本轮 §10.7 记录并加了行为测试；彻底解耦需拆包（同一架构决策） |
+| **A7** | `quoted_tweet` 非空形状、`video`/`animated_gif` media 未实测 | 无真实样本，按「报错不编造」处理；拿到样本后补测 |
+| **A8** | 与任务书的两处显式偏差（`items` 用 tuple、新增 `enrichment` 字段） | 已在 §10.3 记录，无需改动 |
+
+### 10.8.3 S1 基线口径收紧（重要）
+
+审计指出「9 失败」这个口径**不可跨平台复现**。本机（macOS）复核结论与其一致，故收紧表述：
+
+* **本机实测（macOS 3.13.12）**：530 用例 / 9 失败（`test_config` 4、`test_media` 3、`test_external` 2）。
+  根因已定位为平台语义：macOS `tempfile` 的 `/var/...` 与 `.resolve()` 后的 `/private/var/...` 不一致，
+  使 `startswith(知识库根)` 类断言失败；另有盘符 / 机器环境变量断言。**与 Phase 3 文件零交集**。
+* **第三方审计在 Linux 沙箱复跑（其报告值，本机未复现，标注待验证）**：525 用例 / **3 失败 + 16 错误**。
+  其中 14 个 `test_external` 错误源于沙箱 DNS 把 `example.com` 解析到 `198.18.11.198`（基准测试网段）
+  → 被 `netguard` 正确拦截（即"防护生效"，不是产品缺陷）；2 个 `test_media` 错误疑似测试间夹具干扰。
+* **结论**：跨平台验收基线**尚不存在**，「N 个失败」不能作为 Phase 4 的回归口径。
+  Phase 6 必须先在 Windows + macOS 双平台固定分类基线（网络敏感类 / 平台语义类 / 真实缺陷类）。
+* Phase 3 自身的 133 用例在两种环境下均**零失败**。
+
+### 10.8.4 审计未覆盖但值得记录的边界设计
+
+审计 A8 提到偏差已记录，这里补充一条本轮主动说明的设计取舍：
+`_payload_of` 缺失原始 payload 与 `RawBookmarkItem` 构造失败时，`collect()` **故意让整批失败**
+（仅富化环节做单条降级）。理由：这两类失败意味着「上游记录的身份/原文不可用」，若静默跳过会在
+`items` 里丢失该 tweet，Phase 4 可能据此误判「该书签已不存在」而造成数据丢失——**宁可整批报错**。
 

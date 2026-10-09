@@ -59,6 +59,10 @@ class RawBookmarkItemTests(unittest.TestCase):
         with self.assertRaises(RawDataContractError):
             RawBookmarkItem(tweet_id=123, payload={})  # type: ignore[arg-type]
 
+    def test_non_numeric_tweet_id_is_accepted(self):
+        # 契约只要求「非空字符串」以容纳其它采集器（审计 A3：文档与实现对齐）。
+        self.assertEqual(make_item(tweet_id="savebox:abc-123").tweet_id, "savebox:abc-123")
+
     def test_non_mapping_payload_rejected(self):
         with self.assertRaises(RawDataContractError):
             RawBookmarkItem(tweet_id="1", payload=["not", "a", "mapping"])  # type: ignore[arg-type]

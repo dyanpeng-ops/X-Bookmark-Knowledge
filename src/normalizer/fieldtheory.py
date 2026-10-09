@@ -24,8 +24,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Any, Mapping, Sequence
+from typing import Any
 from urllib.parse import urlparse
 
 from ..canonical.validate import MEDIA_TYPES, is_uri, validate_bookmark
@@ -58,6 +59,15 @@ ARTICLE_LINK_HOSTS = frozenset(
     }
 )
 _ARTICLE_PATH_PREFIX = "/i/article/"
+
+#: `content_hash` 覆盖的实质内容字段（缺任一即无法计算；见 compute_content_hash）。
+_HASH_REQUIRED_FIELDS: tuple[str, ...] = (
+    "tweet_id",
+    "text",
+    "url",
+    "author_id",
+    "created_at",
+)
 
 # Canonical 输出键的固定顺序（19 键 = 12 必填 + 7 可选，见 schema）。
 _CANONICAL_KEYS: tuple[str, ...] = (
@@ -105,8 +115,16 @@ def compute_content_hash(bookmark: Mapping[str, Any]) -> str:
     不覆盖：``collected_at`` / ``updated_at`` / ``collector`` / ``source``
     （元数据）与 ``engagement``（互动数流动）。这样重采集不会因时间戳变化而
     误判「内容已变」，跨设备去重才成立。
+
+    本函数是公开 API（见 ``__all__``），输入缺键时报 :class:`NormalizationError`
+    而不是裸 ``KeyError``（审计 A4）。
     """
 
+    for key in _HASH_REQUIRED_FIELDS:
+        if key not in bookmark:
+            raise NormalizationError(
+                f"compute_content_hash: missing required canonical field {key!r}"
+            )
     x_article = bookmark.get("x_article")
     material = {
         "tweet_id": bookmark["tweet_id"],
@@ -114,7 +132,7 @@ def compute_content_hash(bookmark: Mapping[str, Any]) -> str:
         "url": bookmark["url"],
         "author_id": bookmark["author_id"],
         "created_at": bookmark["created_at"],
-        "media": [dict(item) for item in bookmark.get("media") or ()],
+        "media": [dict(entry) for entry in bookmark.get("media") or ()],
         "external_links": list(bookmark.get("external_links") or ()),
         "quoted_tweet": bookmark.get("quoted_tweet"),
         "x_article": {"text": x_article["text"]} if isinstance(x_article, Mapping) else None,
@@ -153,9 +171,10 @@ def _iso_utc(value: str, where: str) -> str:
 
     确定性：同一输入永远得到同一输出（不使用 ``now()``），
     Test L（幂等）与跨设备 ``content_hash`` 去重都依赖这一点。
+    大小写不敏感的 ``z`` 后缀都接受（ISO-8601 允许小写；审计 A2）。
     """
 
-    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    text = value[:-1] + "+00:00" if value[-1:] in ("Z", "z") else value
     try:
         parsed = datetime.fromisoformat(text)
     except (TypeError, ValueError) as exc:

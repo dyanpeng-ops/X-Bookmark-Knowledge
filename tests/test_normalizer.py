@@ -296,6 +296,12 @@ class TimestampTests(NormalizerTestCase):
         del payload_obj["syncedAt"]
         self.assertIsNone(self.normalize_one(payload_obj)["collected_at"])
 
+    def test_lowercase_z_suffix_accepted(self):
+        # 审计 A2 回归：ISO-8601 允许小写 z，此前会被拒。
+        bookmark = self.normalize_one(payload(syncedAt="2026-09-16T02:02:41.036z"))
+        self.assertEqual(bookmark["collected_at"], "2026-09-16T02:02:41.036Z")
+        self.assertEqual(bookmark["updated_at"], "2026-09-16T02:02:41.036Z")
+
     def test_missing_posted_at_raises(self):
         payload_obj = payload()
         del payload_obj["postedAt"]
@@ -764,6 +770,16 @@ class ContentHashTests(NormalizerTestCase):
     def test_hash_matches_manual_recompute(self):
         bookmark = self.normalize_one(sample_payloads()[0])
         self.assertEqual(bookmark["content_hash"], compute_content_hash(bookmark))
+
+    def test_missing_field_raises_normalization_error(self):
+        # 审计 A4 回归：公开 API 传缺键 dict 应报 NormalizationError，而非裸 KeyError。
+        bookmark = self.normalize_one(sample_payloads()[0])
+        for key in ("tweet_id", "text", "url", "author_id", "created_at"):
+            with self.subTest(key=key):
+                broken = dict(bookmark)
+                del broken[key]
+                with self.assertRaises(NormalizationError):
+                    compute_content_hash(broken)
 
 
 # ── 验收 E/F：Normalizer 不读取 Field Theory ─────────────────────────────────
