@@ -31,14 +31,14 @@ _CONTENT_HASH = "a" * 64  # 合法形状（不参与语义，仅格式校验）
 def _valid() -> dict:
     """返回一条结构合法的 CanonicalBookmark 样本。"""
     return {
-        "tweet_id": "2098040323830407200",
-        "author": "小码哥",
-        "author_id": "1769141715351605248",
-        "author_username": "xmglab",
+        "tweet_id": "1900000000000000101",
+        "author": "Sample Author",
+        "author_id": "100000001",
+        "author_username": "sample_author",
         "created_at": "2026-09-14T01:24:21Z",
-        "text": "大家好，我是小码哥。",
-        "url": "https://x.com/xmglab/status/2098040323830407200",
-        "conversation_id": "2098040323830407200",
+        "text": "Synthetic fixture text.",
+        "url": "https://x.com/sample_author/status/1900000000000000101",
+        "conversation_id": "1900000000000000101",
         "source": "x",
         "collector": "fieldtheory",
         "quoted_tweet": None,

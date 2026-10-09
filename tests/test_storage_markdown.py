@@ -35,18 +35,18 @@ from src.storage.markdown_projection import (  # noqa: E402
     write_markdown,
 )
 
-TWEET_ID = "2098040323830407200"
+TWEET_ID = "1900000000000000101"
 
 
 def bookmark(tweet_id: str = TWEET_ID, **overrides) -> dict:
     data = {
         "tweet_id": tweet_id,
-        "author": "小码哥",
-        "author_id": "1769141715351605248",
-        "author_username": "xmglab",
+        "author": "Sample Author",
+        "author_id": "100000001",
+        "author_username": "sample_author",
         "created_at": "2026-09-10T13:26:07Z",
         "text": "示例正文 with unicode ✓",
-        "url": f"https://x.com/xmglab/status/{tweet_id}",
+        "url": f"https://x.com/sample_author/status/{tweet_id}",
         "conversation_id": tweet_id,
         "source": "x",
         "collector": "fieldtheory",
@@ -124,9 +124,9 @@ class FrontmatterTests(unittest.TestCase):
 
     def test_author_semantics_follow_decision_d2(self):
         parsed, _ = split_frontmatter(render_markdown(bookmark()))
-        self.assertEqual(parsed["author"], "小码哥")          # 显示名
-        self.assertEqual(parsed["author_username"], "xmglab")  # handle
-        self.assertEqual(parsed["author_id"], "1769141715351605248")
+        self.assertEqual(parsed["author"], "Sample Author")          # 显示名
+        self.assertEqual(parsed["author_username"], "sample_author")  # handle
+        self.assertEqual(parsed["author_id"], "100000001")
 
     def test_null_optional_fields(self):
         parsed, _ = split_frontmatter(render_markdown(bookmark(conversation_id=None,
@@ -146,7 +146,7 @@ class FrontmatterTests(unittest.TestCase):
         self.assertEqual(parsed["link_count"], 2)
 
     def test_unicode_not_escaped(self):
-        self.assertIn("小码哥", render_frontmatter(bookmark()))
+        self.assertIn("Sample Author", render_frontmatter(bookmark()))
 
     def test_quote_and_backslash_escaped(self):
         front = render_frontmatter(bookmark(author='He said "hi" \\ bye'))
@@ -169,9 +169,9 @@ class BodyTests(unittest.TestCase):
     def test_original_tweet_metadata(self):
         _, body = split_frontmatter(render_markdown(bookmark()))
         self.assertIn("示例正文", body)
-        self.assertIn("@xmglab", body)
+        self.assertIn("@sample_author", body)
         self.assertIn("2026-09-10T13:26:07Z", body)
-        self.assertIn(f"https://x.com/xmglab/status/{TWEET_ID}", body)
+        self.assertIn(f"https://x.com/sample_author/status/{TWEET_ID}", body)
 
     def test_media_rendered(self):
         data = bookmark(media=[{"type": "photo", "url": "https://pbs.twimg.com/media/A.png",
