@@ -1,24 +1,50 @@
 # PLAN
 
 > 项目：X Bookmark Knowledge Pipeline
-> 项目根：`D:\Users\label-workplace\Agent-Eval\AI-Agent-Lab\01_Knowledge-Agent\projects\X-Bookmark-Knowledge\`
-> 最后更新：2026-09-21（Phase 9 复审关闭；离线套件经批准全绿，真实数据写运行待批准）
+> 项目根：`/Users/nanopeng/AI-Agent-Lab/X-Bookmark-Knowledge/`（macOS）
+> 最后更新：2026-10-08（跨平台改造 Phase 3 实现完毕并离线验收：RawCollectorData + FieldTheoryCollector + FieldTheoryNormalizer，128 用例绿）
+
+> **跨平台改造说明（2026-10-07 起）**：本项目已从「Windows-only、fieldtheory 附属」重构为
+> 「跨平台、Collector 可替换、Canonical Data 稳定」的分层架构。旧 Phase 0–9 的验收记录（含
+> 下述状态表）为 Windows 时代历史，**已过时**，保留作存档。新的改造 Phase 顺序见
+> `ARCHITECTURE.md` §15（Phase 0 审计 → 1 架构设计 → 2 Schema → 3 Collector Adapter →
+> 4 Storage → 5 CLI → 6 Cross Platform → 7 Git Sync → 8 Knowledge-Agent）。
 
 ---
 
-## 1. 当前状态
+## 1. 当前状态（跨平台改造）
 
 | 项 | 值 |
 | --- | --- |
-| 已完成 | Phase 0 – Phase 8（M1、M2、M3 达成）；Phase 9 实现完毕、复审关闭，离线全量经批准通过；真实数据写运行待批准 |
-| 当前阶段 | **Phase 9：实现完毕 + 复审关闭（2026-09-21）**；待真实数据写运行（links / process / 二次 links / sync 回归） |
-| 技术路线 | `fieldtheory` CLI 作 Collector（Adapter 隔离）+ 其余自研（详见 `research/architecture-decision.md`） |
-| 当前阻塞 | 无（Phase 6 的上游缓存污染已收尾：`data/upstream` 现为 5 条真实记录 + 6 个媒体文件，无 `stub-argv.txt`） |
-| 最近验证 | ①（2026-09-21，经批准）`.venv\Scripts\python.exe -m unittest discover -s tests -t .` → **369 passed / exit 0**（`tests/test_external.py` 94/94）；② `git diff --check` 干净；③ `links --dry-run`（真实数据）：attempted 5 / fetched 1 / skipped 4 / failed 0，不写盘（注意：dry-run 仍会联网）。Phase 8 的真实数据结论不变 |
+| 改造进度 | Phase 0（审计）✅ → Phase 1（架构设计）✅ → Phase 2（Schema）✅ → **Phase 3（Collector Adapter）✅ 实现完毕并离线验收** → Phase 4（Storage）待授权 |
+| 当前阶段 | **Phase 3 完成（未提交）**：`src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + 3 个测试文件（128 用例绿）；5 条真实数据只读转换 5/5 通过 Schema |
+| 技术路线 | Collector 可替换（Protocol + registry + 配置驱动）；CanonicalBookmark 为统一标准；SQLite 降级为可重建索引 |
+| 真实数据 | 已从 Windows 包迁移到 `data/`（upstream/raw/state/logs）与 `knowledge/X-Bookmarks/`（5 篇 md + 媒体），`config/config.yaml` 就位 |
+| 已知问题 | 全量测试 9 个失败（原记录 11 个，需在 Phase 6 复核），均为 Windows 语义平台断言（盘符 `Z:/C:`、路径分隔、`/var` 软链、机器环境变量），属 Phase 6 跨平台范畴，非代码 bug |
 
 ---
 
-## 2. 阶段进度
+## 2. 阶段进度（跨平台改造）
+
+| Phase | 名称 | 状态 | 产物 |
+| --- | --- | --- | --- |
+| 0 | 架构审计 | ✅ 完成 | `docs/CURRENT_ARCHITECTURE.md` |
+| 1 | 架构设计 | ✅ 完成 | `ARCHITECTURE.md`（六层架构 + 决策 R1–R7） |
+| 2 | Canonical Schema | ✅ 完成（2026-10-08） | `schema/bookmark.schema.json` + `src/canonical/validate.py` + `tests/test_schema.py`（28 用例） |
+| 3 | Collector Adapter | ✅ 完成（2026-10-08，未提交） | `src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + `tests/test_{raw_data,fieldtheory_collector,normalizer}.py`（128 用例） |
+| 4 | Storage | ⏳ 待开始 | Markdown / JSON / SQLite 索引 + `rebuild-index` |
+| 5 | CLI | ⏳ 待开始 | `xbk` 入口 + 命令对齐 |
+| 6 | Cross Platform | ⏳ 待开始 | Windows + macOS 验证（修复 9 个平台断言，需先复核基线数字） |
+| 7 | Git Sync | ⏳ 待开始 | Windows↔GitHub↔Mac |
+| 8 | Knowledge-Agent | ⏳ 待开始 | 分类/摘要/标签/关联/问答 |
+
+---
+
+## 2.1 旧阶段进度（Windows 时代，已过时存档）
+
+---
+
+## 2. 阶段进度（旧，Windows 时代存档）
 
 | Phase | 名称 | 状态 | 产物 |
 | --- | --- | --- | --- |

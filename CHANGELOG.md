@@ -9,6 +9,102 @@
 
 ---
 
+## [Phase 3 · 跨平台改造] 2026-10-08 — Collector Adapter（RawCollectorData → CanonicalBookmark）
+
+> 状态：**实现完毕、已离线验收并通过提交前独立审核**。新增 128 用例全绿；5 条真实数据只读转换
+> 5/5 通过 Schema 校验（经老板批准执行，见 `AGENTS.md` §16/§17）。
+> 决策、修正与审核记录见 `docs/phase3-preflight-review.md` §10。
+> **未修改 Schema**、未写 `data/`/`knowledge/`、未联网、未提交 Git。
+> **零新增第三方依赖**（全部标准库；本机 `.venv` 仅 `pyyaml`，测试用 `unittest`）。
+
+### Added
+
+- `src/collector/raw_data.py` — 冻结 Collector↔Normalizer 边界契约：`RawCollectorData(collector, items, cursor)`
+  + `RawBookmarkItem(tweet_id, payload, enrichment=None)` + `RawDataContractError`。`payload` 保持上游
+  camelCase 原记录，FT 专属字段（`engagement`/`ingestedVia`/`sortIndex`…）只停留在 Raw 层。
+- `src/collector/fieldtheory/`（任务书 §7 指定路径）— `FieldTheoryCollector.collect() -> RawCollectorData`：
+  注入式复用 Phase 5 `FieldTheoryAdapter.read_bookmarks()` 读取上游 JSONL，并从项目内
+  `data/raw/{tweet_id}.json` 的 `enrichment` 块读取 Article/quotedTweet 富化。**不执行上游 CLI、不联网、不写盘**；
+  单条富化快照损坏默认降级为 `enrichment=None` 并记入 `last_warnings`（单条失败不拖垮整批），`strict=True` 可改为抛错。
+- `src/normalizer/` — `FieldTheoryNormalizer`（`RawCollectorData → CanonicalBookmark` dict，直接对接
+  `canonical.validate`）、`compute_content_hash()`（`ARCHITECTURE.md` §5.4 九项）、
+  `errors.py`（`NormalizationError` + 任务书 §16 六类错误映射表）。
+- `tests/test_raw_data.py`（20）、`tests/test_fieldtheory_collector.py`（21）、`tests/test_normalizer.py`（87）
+  — 覆盖任务书 §18 Test A–L，含「Canonical 输出恰好 19 键」「FT 专属字段不泄漏」「非 URI 外链丢弃」
+  「Article-only links 过滤」「外链保序去重」「幂等」「`content_hash` 排除元数据/engagement」
+  以及基于 **AST** 的依赖边界断言与「屏蔽进程/网络后仍跑通」的行为断言（提交前审核补充）。
+
+### Changed
+
+- `src/collector/base.py` — `Collector` Protocol 新增 `collect() -> RawCollectorData`（任务书 §22：复用既有
+  接口而非另起第二套），并 re-export `RawCollectorData`（+12 行）。
+- `PLAN.md` / `tasks/CURRENT.md` / `docs/phase3-preflight-review.md`（追加决策与修正记录；预检的
+  「18 字段/12 必填/6 可选」更正为 **19 属性/12 必填/7 可选**）。
+
+### Fixed
+
+- 预检评审中 `content_hash` 覆盖范围由「…等」更正为 `ARCHITECTURE.md` §5.4 确定的九项
+  （原描述漏了 `author_id`/`created_at`/`quoted_tweet`/`x_article.text`）。
+- 预检评审「`collected_at` 取 now()」与 Test L（幂等）的矛盾：改为取 `payload.syncedAt`，输出确定性。
+
+### Decided
+
+- **决策 1**：Normalizer 输出 `dict`（不建 `CanonicalBookmark` dataclass），与 Phase 2 校验器无缝衔接。
+- **决策 2**：`content_hash` 由 Normalizer 计算，SHA-256，严格按 §5.4 九项；排除
+  `collected_at`/`updated_at`/`collector`/`source`/`engagement`。
+- **决策 3**：旧 `fieldtheory_adapter.py` 保留不动，新建 `src/collector/fieldtheory/` 包（任务书 §7 路径）。
+- **决策 4**：富化数据源为 `data/raw/{tweet_id}.json` 的 `enrichment` 块 → Phase 3 采集路径完全离线。
+- **决策 5**：`collected_at` / `updated_at` 取 `payload.syncedAt`。
+- `external_links` 过滤 scheme 无关（`http`/`https`）且覆盖 `x.com`/`twitter.com`；`x.com/i/article/…`
+  归 Article 语义而非外链；重复外链保序去重。`reply_to`/`thread` 显式写 `null` 并记为 Schema gap。
+
+### Deferred
+
+- `engagement` 无 Canonical 字段 → 留 `payload`（任务书 §14 不为完整支持扩张 Schema）。
+- `quotedTweet` **形状待验证**（真实 5 条 + fixtures 均为 `null`，无实测非空样本）；
+  `video`/`animated_gif` media 未实测。
+- 非绝对 URI 外链被丢弃（记 gap）；`Collector` Protocol 仍含写上游的 `sync()`（未来可拆只读 Protocol）。
+- 全量测试 9 个失败（`test_config`/`test_media`/`test_external` 的 Windows 路径语义），归 Phase 6；
+  与 `PLAN.md` 原记录「11 个」不一致，需在 Phase 6 复核基线。
+
+---
+
+## [Phase 2 · 跨平台改造] 2026-10-08 — CanonicalBookmark JSON Schema + 校验器
+
+> 状态：**实现完毕、已验收**（`tests/test_schema.py` 28/28 绿，经老板批准运行）。
+> 说明：以下 Phase 记录为「跨平台改造」新序列，与旧 Phase 9（上方）是两条独立时间线。
+> 旧序列记录保留作 Windows 时代存档。
+
+### Added
+
+- `schema/bookmark.schema.json` — `CanonicalBookmark` 权威契约（JSON Schema draft 2020-12）：
+  - 12 个必填键（含 `media` / `external_links`，见下「决策 A」）、18 个字段、3 个 `$defs`
+    （`mediaObject` / `quotedTweet` / `xArticle`）。
+  - `additionalProperties: false`：拒绝上游专属字段（如 `ingestedVia`），强制「Canonical 只认
+    契约、不泄漏 fieldtheory 形状」。
+  - `tweet_id` 为全局唯一主键；`source` 固定 `"x"`（决策 D5）；`content_hash` 锁定
+    SHA-256 十六进制 64 字符（`pattern`）。
+- `src/canonical/validate.py` — 标准库校验器 `validate_bookmark()`，与 schema 一一对应，
+  **零第三方依赖**（不引入 `jsonschema`，符合「依赖最小化」）。
+- `src/canonical/__init__.py` — L3 Canonical Data Layer 包（当前仅含校验器）。
+- `tests/test_schema.py` — 28 用例：合法样本 / 缺必填键 / 错类型 / 固定值 / 时间与 URI 格式 /
+  `content_hash` 格式 / media 与外链 / 嵌套结构 / schema 文件静态一致性（防漂移）。
+
+### Decided
+
+- **决策 A**：`media` / `external_links` 为**必填但允许空数组**的字段（缺 key 即非法，空数组合法）。
+  理由：跨设备交换时字段结构稳定，下游不必判空。
+- **决策 B**：校验器采用标准库手写，**不引入 `jsonschema`**。理由：项目红线「依赖最小化、
+  优先标准库」；且生产与测试共用同一校验逻辑，避免「schema 与实现两份校验」漂移。
+- 落实架构决策 D2（`author`=显示名 / `author_username`=handle / `author_id`=用户 ID）、
+  D5（`source="x"`）。
+
+### Changed
+
+- `PLAN.md` — 顶部新增「跨平台改造」状态段与阶段表；旧 Windows 阶段表标注为「已过时存档」。
+
+---
+
 ## [Phase 9] 2026-09-20 — External Link Extraction（实现完毕，**待验收**）
 
 > 状态：**实现完毕、未验收**。待验证清单见 `tasks/CURRENT.md`，未获批准前不得执行。

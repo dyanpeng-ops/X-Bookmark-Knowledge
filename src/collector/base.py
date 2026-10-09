@@ -4,6 +4,7 @@ This module is dependency-free (standard library only) so that both the
 upstream contract validators and the fieldtheory adapter can build on it.
 
 Dependency direction: collector.base  <-  collector.contract  <-  collector.fieldtheory_adapter
+                     collector.raw_data  <-  collector.base   <-  collector.fieldtheory
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
+
+from .raw_data import RawCollectorData
 
 __all__ = [
     "CollectorError",
@@ -25,6 +28,7 @@ __all__ = [
     "MediaManifest",
     "UpstreamBookmark",
     "EnrichedBookmark",
+    "RawCollectorData",
     "Collector",
 ]
 
@@ -198,3 +202,11 @@ class Collector(Protocol):
 
     def read_bookmarks(self) -> Sequence[UpstreamBookmark]:
         """Read every bookmark currently cached upstream."""
+
+    def collect(self) -> RawCollectorData:
+        """Read upstream data into the neutral ``RawCollectorData`` contract.
+
+        Phase 3 (task book §22) reuses this protocol instead of defining a second
+        collector interface. Implementations must be read-only with respect to the
+        upstream data directory and must not write SQLite/Markdown/Knowledge/Git.
+        """

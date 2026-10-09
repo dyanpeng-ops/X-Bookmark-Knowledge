@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://x-bookmark-knowledge.local/schema/bookmark.schema.json",
+  "title": "CanonicalBookmark",
+  "description": "X Bookmark Knowledge Pipeline 的跨平台统一书签数据契约（L3 Canonical Data Layer）。\n\ntweet_id 是全局唯一主键，不得使用 fieldtheory 内部 ID。\n本契约是 Normalizer（L2）的输出标准，Collector 的可替换性由 L1 保证，\n下游（Markdown / JSON / SQLite 三种投影、Knowledge Layer）只认本契约。\n\n设计依据：ARCHITECTURE.md §5.1 / §5.4 / §7。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tweet_id",
+    "author",
+    "author_id",
+    "author_username",
+    "created_at",
+    "text",
+    "url",
+    "source",
+    "collector",
+    "content_hash",
+    "media",
+    "external_links"
+  ],
+  "properties": {
+    "tweet_id": {
+      "type": "string",
+      "description": "全局唯一主键（X 推文 ID，纯数字字符串）",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "description": "作者显示名（display name），区别于 author_username（handle）。决策 D2。",
+      "minLength": 1
+    },
+    "author_id": {
+      "type": "string",
+      "description": "X 用户 ID（数字字符串）",
+      "minLength": 1
+    },
+    "author_username": {
+      "type": "string",
+      "description": "作者 handle（如 yhslgg，不含 @）。决策 D2。",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "发帖时间，统一 UTC ISO-8601（如 2026-09-14T01:24:21Z）"
+    },
+    "text": {
+      "type": "string",
+      "description": "推文正文（原始文本）"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "推文 URL（https://x.com/<handle>/status/<tweet_id>）"
+    },
+    "conversation_id": {
+      "type": ["string", "null"],
+      "description": "会话 ID（可空）"
+    },
+    "source": {
+      "type": "string",
+      "const": "x",
+      "description": "采集来源，固定为 x（决策 D5，替代 fieldtheory 内部 ingestedVia=graphql）"
+    },
+    "collector": {
+      "type": "string",
+      "description": "Collector 标识（如 fieldtheory / x_api / savebox / mock）",
+      "minLength": 1
+    },
+    "quoted_tweet": {
+      "type": ["object", "null"],
+      "description": "被引用推文（富化数据，可空）。结构见 quotedTweet 子定义。",
+      "$ref": "#/$defs/quotedTweet"
+    },
+    "reply_to": {
+      "type": ["string", "null"],
+      "description": "回复目标 tweet_id（富化数据，可空）"
+    },
+    "thread": {
+      "type": ["array", "null"],
+      "description": "线程 tweet_id 列表（富化数据，可空）",
+      "items": { "type": "string" }
+    },
+    "media": {
+      "type": "array",
+      "description": "媒体对象数组（必填，无媒体时为空数组 []）。每个元素对应一条媒体记录。",
+      "items": { "$ref": "#/$defs/mediaObject" }
+    },
+    "external_links": {
+      "type": "array",
+      "description": "外链 URL 数组（必填，无外链时为空数组 []）。",
+      "items": { "type": "string", "format": "uri" }
+    },
+    "x_article": {
+      "type": ["object", "null"],
+      "description": "X Article 正文（富化数据，可空）。",
+      "$ref": "#/$defs/xArticle"
+    },
+    "collected_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "采集时间（UTC ISO-8601）。属元数据，不参与 content_hash（§5.4）。"
+    },
+    "updated_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "更新时间（UTC ISO-8601）。属元数据，不参与 content_hash（§5.4）。"
+    },
+    "content_hash": {
+      "type": "string",
+      "description": "内容哈希（SHA-256 十六进制，64 字符）。覆盖实质内容字段，排除 collected_at/updated_at/collector/source/engagement（§5.4）。",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "mediaObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "媒体类型（photo / video / animated_gif）",
+          "enum": ["photo", "video", "animated_gif"]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "媒体原始 URL"
+        },
+        "expandedUrl": {
+          "type": ["string", "null"],
+          "format": "uri",
+          "description": "展开后的 URL（可空）"
+        },
+        "width": {
+          "type": ["integer", "null"],
+          "description": "宽度（像素，可空）"
+        },
+        "height": {
+          "type": ["integer", "null"],
+          "description": "高度（像素，可空）"
+        }
+      }
+    },
+    "quotedTweet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tweet_id", "author_handle", "text"],
+      "properties": {
+        "tweet_id": { "type": "string" },
+        "author_handle": { "type": "string" },
+        "text": { "type": "string" },
+        "url": { "type": ["string", "null"], "format": "uri" }
+      }
+    },
+    "xArticle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "title": { "type": ["string", "null"] },
+        "text": { "type": "string" },
+        "site": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
