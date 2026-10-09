@@ -29,9 +29,15 @@
 | 报告源文件 | 同步一份到仓库 `docs/` | Git |
 
 - 生产目录：`/Users/nanopeng/AI-Agent-Lab/x-bookmark-audit/`
-- Drive 文件夹 ID：
-  - development report：`1RC9xW__N0soTDkG4cVsiiS0d5d-Ia8mV`
-  - audit report：`1W6lJQuA4-FbOiWwJbnTSfCQ_s0QgYVgV`
+- Drive 文件夹（Google 账号 `u/1`；**ID 为准**，名称仅作识别）：
+
+| 用途 | 名称（2026-10-09 确认） | 文件夹 ID |
+|---|---|---|
+| 开发报告 | `x-bookmark-development report` | `1RC9xW__N0soTDkG4cVsiiS0d5d-Ia8mV` |
+| 审计报告 | `x-bookmark-audit report` | `1W6lJQuA4-FbOiWwJbnTSfCQ_s0QgYVgV` |
+
+> 注：审计文件夹原名 `x-bookmark-aduit report`（拼写笔误），用户已于 2026-10-09 改为
+> `x-bookmark-audit report`；**文件夹 ID 未变**，历史链接继续有效。识别一律以 ID 为准，避免再次改名时失配。
 
 ## 3. 循环单元
 
