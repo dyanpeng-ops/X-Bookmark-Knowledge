@@ -93,7 +93,7 @@
 | `README.md` | 3 处过期/平台限定内容更正 |
 | `CHANGELOG.md` | 新增「Phase 9 · 审计响应」记录 |
 | `tasks/DEV-AUDIT-LOOP.md` | 新增（循环工作流定义，本循环的授权与步骤依据） |
-| `docs/X-Bookmark-Knowledge-P3-Report-2026-10-09.md` | 上一轮产出（已上传 Drive；原名 `progress-report.md`） |
+| `docs/X-Bookmark-Knowledge-Phase3-Report-2026-10-09.md` | 上一轮产出（已上传 Drive；原名 `progress-report.md`） |
 
 提交：见本轮 `git log`（已推送 `origin/main`）。
 
