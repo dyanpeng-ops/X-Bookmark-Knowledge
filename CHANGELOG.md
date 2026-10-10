@@ -44,6 +44,32 @@
 
 ---
 
+## [Phase 5 · 可观测性补全] 2026-10-10 — `doctor` 检查 Canonical 目录 + 打包期证据新鲜度硬护栏
+
+### Added
+
+- `src/cli/main.py`：`doctor` 新增**非关键**检查项 `canonical normalized` —— 报告
+  `<data_dir>/normalized` 是否存在及 JSON 数量；缺失时提示「先跑 `normalize --apply`（演练不会创建）」。
+  非关键 ⇒ **不影响退出码**，不会让 `doctor` 因尚未规范化而失败。
+- `X-Bookmark-Knowledge-Automation/pipeline/audit_package.py`（自动化侧）：新增
+  `--require-fresh-evidence` **硬护栏** —— 只要证据日志出现 `stale` / `undeclared` /
+  `unverifiable` / `reused` 就**拒绝出包**（此前只记录不拦截，F-006 的修复只做到"可见"）。
+
+### Fixed
+
+- `audit_evidence_provenance()` 的状态判定缺陷（**由本轮新测试抓到**）：未声明包内 `head_commit`
+  （包未用 git range）时，原先会把"已声明 commit"直接标为 `matches_head` —— 等于**谎报了一个
+  无法验证的匹配**。现新增 `unverifiable` 状态：无 head 可对照时如实标注，并由硬护栏拒绝出包。
+
+### Verified
+
+- `tests.test_cli_canonical`：**17/17 绿**（新增 2 个 doctor 用例）；既有 `tests.test_cli.DoctorCommandTests`：3/3 绿。
+- 流水线：**127/127 绿**（新增 3 个护栏用例，含"无 head 必须拒绝"与"有真实 head 时通过"）。
+- 全量：**652 用例**；失败集与改动前日志逐条比对：新增 0 / 消失 0 → 零回归。
+- 变异验证：把 `doctor` 的 normalized 计数恒置 0 → 用例捕获。
+
+---
+
 ## [Phase 5 · 文档与可观测性] 2026-10-10 — README/配置示例修正 + `status` 报告 Canonical 现状
 
 ### Changed

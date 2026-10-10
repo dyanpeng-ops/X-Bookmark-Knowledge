@@ -194,6 +194,28 @@ class StatusCanonicalTests(CliCanonicalTestCase):
         self.assertIn("canonical", buffer.getvalue())
 
 
+class DoctorCanonicalTests(CliCanonicalTestCase):
+    """`doctor` 应只读报告 Canonical normalized 目录是否就绪（非关键项，不改变退出码）。"""
+
+    def run_doctor(self) -> tuple[int, str]:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = self.run_cli("doctor")
+        return code, buffer.getvalue()
+
+    def test_doctor_reports_missing_normalized_dir(self):
+        code, out = self.run_doctor()
+        self.assertIn("canonical normalized", out)
+        self.assertIn("缺失", out)
+        self.assertEqual(code, EXIT_OK)          # 非关键项 ⇒ 不影响退出码
+
+    def test_doctor_counts_normalized_files(self):
+        write_canonical_json(bookmark("1900000000000000401"), self.normalized)
+        write_canonical_json(bookmark("1900000000000000402"), self.normalized)
+        _, out = self.run_doctor()
+        self.assertIn("2 JSON", out)
+
+
 class EntryPointTests(unittest.TestCase):
     def test_pyproject_declares_xbk_entry_point(self):
         payload = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))

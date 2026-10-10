@@ -983,6 +983,24 @@ def _cmd_doctor(args: argparse.Namespace, config: AppConfig) -> int:
     log_ok, log_detail = _probe_writable_dir(config.paths.log_dir)
     check("log directory", log_ok, log_detail, critical=False)
 
+    # Canonical 流水线（Phase 4–5）：只读检查 normalized 目录是否就绪
+    normalized_dir = config.paths.data_dir / "normalized"
+    if normalized_dir.is_dir():
+        normalized_count = len(list(normalized_dir.glob("*.json")))
+        check(
+            "canonical normalized",
+            True,
+            f"{normalized_count} JSON at {normalized_dir}",
+            critical=False,
+        )
+    else:
+        check(
+            "canonical normalized",
+            False,
+            f"缺失（先跑 `normalize --apply`；演练不会创建）：{normalized_dir}",
+            critical=False,
+        )
+
     upstream_dir = config.collector.upstream_data_dir or adapter.data_dir
     on_c_drive = str(upstream_dir).upper().startswith("C:")
     check(
