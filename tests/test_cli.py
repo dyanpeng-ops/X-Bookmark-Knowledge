@@ -25,6 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.cli import EXIT_CONFIG, EXIT_FAILURE, EXIT_OK, EXIT_UPSTREAM, main  # noqa: E402
 from src.database import connect  # noqa: E402
+from src.database.schema import SCHEMA_VERSION  # noqa: E402
 
 STUB = Path(__file__).resolve().parent / "support" / "stub_fieldtheory.py"
 
@@ -183,7 +184,9 @@ class StatusCommandTests(CliTestCase):
         self.assertEqual(code, EXIT_OK)
         payload = json.loads(out)
         self.assertEqual(payload["database"]["total"], 3)
-        self.assertEqual(payload["database"]["schema"]["current_version"], 2)
+        # 版本无关：引用 SCHEMA_VERSION 而非硬编码 2
+        # （Phase 4 Step 3 加 migration 3 时暴露了这个脆弱断言）
+        self.assertEqual(payload["database"]["schema"]["current_version"], SCHEMA_VERSION)
         self.assertTrue(payload["upstream"]["ready"])
         self.assertEqual(payload["upstream"]["records"], 3)
         self.assertEqual(payload["config"]["unknown_keys"], [])

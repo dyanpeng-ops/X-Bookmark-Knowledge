@@ -47,7 +47,12 @@
   - **不覆盖内容不同的既有文件**（冲突抛 `MarkdownConflict`，显式 overwrite 才改写）
   - 测试 `tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 捕获；全量 592 用例失败集 md5 未变
   - 与 ARCHITECTURE §7 的差异：不写 `tags`/`categories`（Canonical 无此字段），`engagement` 等同样记 gap
-- **Step 3–5 待续**：SQLite 索引（R6 两类字段）→ `rebuild-index` → 全量验收
+- **Step 3 已完成**（R6 字段二分）：
+  - `src/database/r6_fields.py`：内容索引 / 运行态 / 结构列分类（唯一真实来源）+ 完整性护栏
+  - `src/database/schema.py`：`MIGRATION_3` 补 `bookmarks.content_hash` + 索引（**原表没有这一列**）
+  - `src/database/index_store.py`：幂等写入（同 hash 不写盘；只改内容列）+ 运行态重置
+  - `tests/test_database_r6.py` **19 用例**；既有 database 层 70/70；全量失败集与基线一致
+- **Step 4–5 待续**：`rebuild-index`（删库重建 + 运行态重置语义写进命令帮助）→ 全量验收（真实数据只读 dry-run 需批准）
 
 - **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
 - **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影

@@ -143,7 +143,12 @@ class MigrationTests(DatabaseTestCase):
             )
             self.assertEqual(current_version(legacy), 1)
             self.assertFalse(table_exists(legacy, "media"))
-            self.assertEqual([migration.version for migration in pending_migrations(legacy)], [2])
+            # 版本无关断言：v1 之后**所有**待应用迁移（原先硬编码 [2]，
+            # 一旦新增迁移就会误报失败——Phase 4 Step 3 加 migration 3 时暴露）
+            self.assertEqual(
+                [migration.version for migration in pending_migrations(legacy)],
+                [migration.version for migration in MIGRATIONS if migration.version > 1],
+            )
 
             upgraded = apply_migrations(legacy)
             self.assertEqual(upgraded, SCHEMA_VERSION)

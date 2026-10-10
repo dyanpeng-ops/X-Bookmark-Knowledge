@@ -158,7 +158,18 @@ MIGRATION_2 = Migration(
     ),
 )
 
-MIGRATIONS: tuple[Migration, ...] = (MIGRATION_1, MIGRATION_2)
+MIGRATION_3 = Migration(
+    version=3,
+    name="R6 content hash (content-index vs runtime split)",
+    statements=(
+        # R6 内容索引的核心键：幂等判断（内容未变即跳过）依赖它。
+        # 既有行为 NULL（Windows 时代遗留），Phase 4 写入一律填充。
+        "ALTER TABLE bookmarks ADD COLUMN content_hash TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_bookmarks_content_hash ON bookmarks (content_hash)",
+    ),
+)
+
+MIGRATIONS: tuple[Migration, ...] = (MIGRATION_1, MIGRATION_2, MIGRATION_3)
 
 SCHEMA_VERSION: int = max(migration.version for migration in MIGRATIONS)
 

@@ -44,6 +44,44 @@
 
 ---
 
+## [Phase 4 · Step 3] 2026-10-09 — SQLite 索引（R6 字段二分落地）
+
+### Added
+
+- `src/database/r6_fields.py` —— **R6 分类的唯一真实来源**（`ARCHITECTURE.md` §6.3.1 / 决策 R6）：
+  - 内容索引（`tweet_id`/`content_hash`/`path`/可搜索字段…）：可由 `normalized/*.json` 重建，不可丢失；
+  - 运行态（`status`/`attempts`/`error_message`/`*_at`/`download_status`/`fetch_status`）：**无重建来源，重建时重置**；
+  - 结构列（代理主键 `id`）：重建时由 SQLite 重新分配；
+  - `assert_classification_complete()` 双向校验 DDL 与归类——**DDL 新增列忘记归类会直接报错**。
+- `src/database/index_store.py`：
+  - `upsert_content_index()`：按 `content_hash` 幂等——**同 hash 一个字节都不写**（不写盘、不动时间戳、不触发 FTS）；
+    变化时**只更新内容索引列**，并在接口层拒绝运行态键（`status=`/`attempts=` → `ValueError`），把 R6 边界变成接口约束；
+  - `rebuild_runtime_state()`：三张表运行态重置为初始态（`NEW` / `0` / `NULL` / `PENDING` / 时间戳=重建时刻），内容索引原样保留；
+  - `content_index_snapshot()`：供"重建前后一致"验证。
+- `tests/test_database_r6.py` —— **19 用例**：分类完整性（含"漏归类必须报错"）、`content_hash` 列与索引、
+  幂等三态、**内容更新绝不触碰运行态**、运行态键被拒、FTS 随内容更新、旧 NULL 行被修正、
+  运行态重置与幂等、**重建等价（删库→重建→内容索引逐列一致、运行态回初始态）**。
+
+### Changed
+
+- `src/database/schema.py`：新增 `MIGRATION_3`（`bookmarks.content_hash` + `idx_bookmarks_content_hash`）。
+  **原表没有 `content_hash` 列**，而 R6 的幂等与内容索引均依赖它；迁移前写入的行为 NULL（视为"内容已变"，会被修正）。
+
+### Fixed
+
+- 两处**硬编码 schema 版本**的脆弱断言（被 migration 3 暴露），改为引用 `SCHEMA_VERSION` / `MIGRATIONS`：
+  `tests/test_database.py::test_upgrades_legacy_v1_database_to_latest`、
+  `tests/test_cli.py::test_status_json_reports_database_and_upstream`。
+
+### Verified
+
+- `tests.test_database_r6`：**19/19 绿**；`tests.test_database`：**70/70 绿**（migration 3 为加列，未回归）。
+- 全量：**611 用例**（592 + 19）；失败集与 Step 3 之前的日志**逐条一致**
+  （新增 0 / 消失 0，md5 `31571afa1164be8c7fda267cf6e53641`）→ **零回归**。
+- 离线、SQLite 全在 `:memory:` 或临时目录，未触真实 `data/`。
+
+---
+
 ## [Phase 4 · Step 2] 2026-10-09 — Markdown 投影（Canonical → 知识库 Markdown）
 
 ### Added

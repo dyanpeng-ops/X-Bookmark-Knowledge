@@ -47,7 +47,7 @@ Knowledge-Agent、AI 分类/摘要/标签、Embedding/RAG、外链抓取、新 S
 |---|---|---|
 | S1 | **JSON 投影**：路径布局、原子写（临时文件+替换）、内容未变跳过、非法 Canonical 拒绝 | `tests/test_storage_json.py` 全绿 |
 | S2 ✅ | **Markdown 投影**：路径 `{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`、frontmatter 14 键、正文两段式、不覆盖内容不同的既有文件 | ✅ 已交付：`src/storage/markdown_projection.py` + `tests/test_storage_markdown.py`（30 用例）；全量零回归 |
-| S3 | **SQLite 索引**：表结构按 R6 两类划分；写入/更新幂等 | 新增测试 |
+| S3 ✅ | **SQLite 索引**：表结构按 R6 两类划分；写入/更新幂等 | ✅ 已交付：新增 19 用例 + 既有 database 层 70/70 不回归 |
 | S4 | **rebuild-index**：删库重建；运行态重置 | 新增测试（含「删库→重建→内容索引一致」） |
 | S5 | 全量回归 + 真实数据**只读 dry-run** 验收（需另行批准） | 报告 |
 
@@ -88,7 +88,7 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
 |---|---|---|
 | S1 JSON 投影 | ✅ 已完成 | `src/storage/json_projection.py`；30 用例（含审计 F-001/F-004 回归）；Muse 第 2 轮复审 **PASS**（`RUN-20261009T134544Z-r5r2`）|
 | S2 Markdown 投影 | ✅ 已完成 | `src/storage/markdown_projection.py`；`tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 被捕获；全量 **592 用例**失败集 md5 未变（零回归）|
-| S3 SQLite 索引（R6 两类字段） | ⏳ 待开工 | — |
+| S3 SQLite 索引（R6 两类字段） | ✅ 已完成 | `src/database/r6_fields.py` + `index_store.py` + `schema.py`（migration 3）；`tests/test_database_r6.py` **19 用例**；全量失败集与基线一致（零回归）|
 | S4 `rebuild-index` | ⏳ 待开工 | — |
 | S5 全量验收 + 真实数据 dry-run | ⏳ 待批准 | — |
 
@@ -108,3 +108,25 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
    （它们在 Field Theory 侧）。本实现**不写**这两键，避免凭空断言"无标签"。
 2. **`engagement` / `primary_category` / `folder_names`**：§7 称"保留为扩展键"，但 Canonical 同样没有，
    且 Phase 4 不得依赖 FT 侧数据 → 无法生成，记录为 gap。
+
+### S3 实现要点（R6 落地）
+
+- **字段二分成为可执行契约**：`src/database/r6_fields.py` 是「内容索引 / 运行态 / 结构列」分类的唯一真实来源，
+  `assert_classification_complete()` 双向校验 DDL 与归类——**新增列忘记归类会直接报错**（防止 R6 语义悄悄失效）。
+- **补上 `content_hash`**：`MIGRATION_3` 给 `bookmarks` 加列 + 索引。原表**根本没有**这个列，
+  而 R6 的幂等判断（内容未变即跳过）与内容索引全都依赖它；旧行为 NULL，Phase 4 写入一律填充
+  （NULL 视为"内容已变"，会被修正）。
+- **幂等写入**（`IndexStore.upsert_content_index`）：
+  - 同 `content_hash` → `unchanged`，**一个字节都不写**（不写盘、不动时间戳、不触发 FTS）；
+  - 变化 → `updated`，**只更新内容索引列**；
+  - 接口层拒绝运行态键（传 `status=`/`attempts=` 直接 `ValueError`），把 R6 边界变成接口约束。
+- **运行态重置**（`IndexStore.rebuild_runtime_state`）：三张表的运行态列重置为初始态
+  （`status='NEW'` / `attempts=0` / `error_message=NULL` / `download_status|fetch_status='PENDING'` /
+  时间戳=重建时刻），**内容索引列原样保留**。
+- **重建等价已验证**：删库 → 只扫内容重建 → 内容索引逐列与重建前一致，运行态为初始态。
+
+### S3 顺带修正的两处脆弱测试（既有）
+
+migration 3 让两个**硬编码 schema 版本**的断言暴露出来，已改为引用 `SCHEMA_VERSION` / `MIGRATIONS`：
+`tests/test_database.py::test_upgrades_legacy_v1_database_to_latest`（`[2]`）、
+`tests/test_cli.py::test_status_json_reports_database_and_upstream`（`current_version == 2`）。
