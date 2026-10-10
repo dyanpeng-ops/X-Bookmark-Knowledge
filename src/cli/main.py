@@ -845,6 +845,17 @@ def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
                 "data_dir": str(adapter.data_dir),
             },
         }
+        # Canonical 流水线（Phase 4–5）现状：只读统计，不写盘
+        normalized_dir = config.paths.data_dir / "normalized"
+        payload["canonical"] = {
+            "normalized_dir": str(normalized_dir),
+            "normalized_files": (
+                len([item for item in normalized_dir.glob("*.json")])
+                if normalized_dir.is_dir()
+                else 0
+            ),
+            "pipeline": ["normalize", "render", "rebuild-index"],
+        }
     finally:
         connection.close()
 
@@ -883,6 +894,11 @@ def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
         f"(expected v{db['schema']['expected_version']})"
     )
     print(f"  db total      : {db['total']}")
+    canonical = payload.get("canonical") or {}
+    print(
+        f"  canonical     : {canonical.get('normalized_files', 0)} 个 normalized JSON"
+        f" @ {canonical.get('normalized_dir', '(unknown)')}"
+    )
     print(f"  db counts     : " + " | ".join(f"{k} {v}" for k, v in sorted(db["counts"].items())))
     links = db.get("links") or {"counts": {}, "total": 0}
     print(f"  db links      : {links['total']} total | " + " | ".join(

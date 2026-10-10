@@ -161,7 +161,12 @@ npm install -g fieldtheory
 python -m src.cli doctor
 ```
 
-> **现状（2026-09-20）**：`.venv`（Python 3.12.13）与 `requirements.txt`（PyYAML 6.0.3）已就绪；上游 `fieldtheory@1.3.22` 本机已安装（PowerShell 中用 `fieldtheory.cmd`，不要用 `ft`）；`python -m src.cli doctor` 自 Phase 6 起可用（实测输出 `Doctor result: OK`）。项目**没有** `pyproject.toml`，依赖只走 `requirements.txt`。
+> **现状（2026-10-10）**：`.venv`（Python **3.13.12**）与 `requirements.txt`（PyYAML 6.0.3）已就绪；上游 `fieldtheory@1.3.22` 本机已安装（PowerShell 中用 `fieldtheory.cmd`，不要用 `ft`）；`python -m src.cli doctor` 自 Phase 6 起可用（实测输出 `Doctor result: OK`）。
+>
+> **入口（Phase 5 起）**：仓库已含 `pyproject.toml`，其中声明了 `xbk` 控制台入口
+> （`[project.scripts] xbk = "src.cli.main:main"`）。**需先 `pip install -e .` 才生效**（该安装动作
+> 尚未执行）；未安装时一律用等价的 `python -m src.cli`，两者入口函数相同。运行时依赖仍只走
+> `requirements.txt`（`dependencies = []`）。
 >
 > **代码来源**：本项目已托管在**私有**仓库 `https://github.com/dyanpeng-ops/X-Bookmark-Knowledge.git`；新机器 `git clone` 后从第 2 步继续（需要该账号登录或 PAT）。仓库**不含** `config/config.yaml`、`data/` 与书签内容。
 >
@@ -296,6 +301,22 @@ python -m src.cli media     # 媒体本地化（先加 --dry-run 可只看不写
 python -m src.cli links     # 外链正文抓取（--dry-run / --force / --tweet-id / --limit）
 python -m src.cli process   # 渲染 Markdown；媒体与外链段引用本地相对路径
 ```
+
+**Canonical 流水线（Phase 4–5；与上面四条命令并存）**：
+
+```bash
+python -m src.cli normalize --apply     # 上游 JSONL(+ data/raw 富化) → data/normalized/*.json
+python -m src.cli render --apply        # data/normalized/*.json → knowledge/X-Bookmarks/**
+python -m src.cli rebuild-index --apply # data/normalized/*.json → SQLite 内容索引（删库重建）
+```
+
+- 三者**默认都是演练**：不创建、不修改任何文件；确认输出无误后再加 `--apply` 落盘。
+- `render` **不覆盖内容不同的既有 Markdown**（AGENTS §14）：内容相同跳过、不同记为冲突且原文件保持不变，
+  仅在显式 `--overwrite` 时改写。
+- `rebuild-index` 的「**运行态字段重建即重置**」语义写入 `--help`（R6 决策）：内容索引可由
+  `normalized/*.json` 重建，运行态（状态/重试/错误/时间戳/媒体与外链状态）无重建来源，重建后回初始态；
+  需要保留处理进度时改用 `--in-place`（按 `content_hash` 幂等刷新，不动运行态）。
+- 三者均支持 `--normalized-dir` 等目录覆盖参数，便于在临时目录做只读演练。
 
 外链行为（Phase 9）：
 

@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import shutil
 import sys
@@ -159,6 +161,37 @@ class RenderTests(CliCanonicalTestCase):
     def test_missing_normalized_dir_returns_config_error(self):
         from src.cli.main import EXIT_CONFIG
         self.assertEqual(self.run_cli("render", "--apply"), EXIT_CONFIG)
+
+
+class StatusCanonicalTests(CliCanonicalTestCase):
+    """`status` 应只读报告 Canonical 流水线现状（不写盘）。"""
+
+    def status_json(self) -> tuple[int, dict]:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = self.run_cli("status", "--json")
+        return code, json.loads(buffer.getvalue())
+
+    def test_reports_zero_when_no_normalized_files(self):
+        code, payload = self.status_json()
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("canonical", payload)
+        self.assertEqual(payload["canonical"]["normalized_files"], 0)
+
+    def test_counts_normalized_files(self):
+        write_canonical_json(bookmark("1900000000000000301"), self.normalized)
+        write_canonical_json(bookmark("1900000000000000302"), self.normalized)
+        _, payload = self.status_json()
+        self.assertEqual(payload["canonical"]["normalized_files"], 2)
+        self.assertEqual(payload["canonical"]["pipeline"],
+                         ["normalize", "render", "rebuild-index"])
+
+    def test_human_readable_mentions_canonical(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = self.run_cli("status")
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("canonical", buffer.getvalue())
 
 
 class EntryPointTests(unittest.TestCase):

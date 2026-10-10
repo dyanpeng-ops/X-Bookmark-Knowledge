@@ -34,8 +34,13 @@ paths:
 
 # ── Collector（复用上游 fieldtheory CLI）─────────────────────
 collector:
-  # Phase 5 状态（2026-09-16）：Adapter 已实现于 src/collector/fieldtheory_adapter.py，
-  # 上游字段契约已用真实样本冻结（src/collector/contract.py）。
+  # Phase 5 状态（2026-10-10）：
+  #   · src/collector/fieldtheory_adapter.py —— 上游 CLI 适配器（sync/read_*，消费 FT 原始 JSONL），
+  #     字段契约已用真实样本冻结在 src/collector/contract.py；
+  #   · src/collector/fieldtheory/adapter.py —— Canonical 版收集器（collect() → RawCollectorData），
+  #     供 Phase 4/5 的 Canonical 流水线（normalize/render/rebuild-index）使用；
+  #   · 两者暂并存；「是否把 Collector Protocol 拆分/闭合」属待裁定项 S2，
+  #     选项与影响见 X-Bookmark-Knowledge-Automation/docs/PHASE5-PREP-BRIEF.md。
   provider: "fieldtheory"          # 已实现的采集源（fieldtheory@1.3.22）
   # 本机实测（2026-09-15）：PowerShell 中直接调用 `fieldtheory` 会解析到 .ps1 shim，
   # 被 CurrentUser=RemoteSigned 执行策略拦截且无任何输出；`fieldtheory.cmd` 正常返回 1.3.22。

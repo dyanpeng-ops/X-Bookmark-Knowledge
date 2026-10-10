@@ -44,6 +44,35 @@
 
 ---
 
+## [Phase 5 · 文档与可观测性] 2026-10-10 — README/配置示例修正 + `status` 报告 Canonical 现状
+
+### Changed
+
+- `README.md`：
+  - 修正过时现状描述：Python **3.12.13 → 3.13.12**；删去「项目**没有** `pyproject.toml`」
+    （Phase 5 起已存在），补「`xbk` 入口需 `pip install -e .` 才生效、未安装时用 `python -m src.cli`」；
+  - 「流水线顺序」新增 **Canonical 流水线**小节：`normalize --apply` / `render --apply` /
+    `rebuild-index --apply`，并写明**默认均为演练**、`render` 内容不同不覆盖（AGENTS §14）、
+    `rebuild-index` 的「运行态重建即重置」语义（R6）。
+- `config/config.example.yaml`：`collector` 段落原先只提到 Windows 时代的
+  `src/collector/fieldtheory_adapter.py`；现如实区分两套模块
+  （上游 CLI 适配器 vs Canonical 收集器 `src/collector/fieldtheory/adapter.py`），
+  并标注「是否拆分/闭合 Collector Protocol」属待裁定项 **S2**（附决策简报路径）。
+
+### Added
+
+- `status`（`--json` 与人类可读两种输出）新增 `canonical` 段：报告
+  `normalized_dir`、`normalized_files` 数量与流水线命令名；**只读，不写盘**。
+- `tests/test_cli_canonical.py`：新增 3 用例（无文件时为 0 / 计入既有 normalized JSON / 人类可读含 canonical）。
+
+### Verified
+
+- `tests.test_cli_canonical`：**15/15 绿**；`tests.test_cli`（既有）：**14/14 绿**。
+- 全量：**650 用例**；失败集与改动前日志**逐条比对：新增 0 / 消失 0** → 零回归。
+- 变异验证：把 `status` 的 normalized 计数恒置 0 → 用例捕获。
+
+---
+
 ## [Phase 5 · 起步] 2026-10-10 — CLI 规范化入口（决策无关部分）
 
 > 说明：Phase 5 的**完整范围**取决于待裁定项 **S2**（Collector Protocol 拆分）与
