@@ -44,6 +44,30 @@
 
 ---
 
+## [Phase 5 · 证据质量] 2026-10-10 — CLI 级 A1 回归 + 证据日志改 verbose
+
+### Added
+
+- `tests/test_cli_canonical.py`：新增 **CLI 级 A1 回归**用例
+  `test_non_utf8_enrichment_snapshot_does_not_break_batch` —— 把一条富化快照写成非 UTF-8，
+  断言 `normalize --apply` 仍 **exit 0**、上游**全部条目**照常落盘、且报告**如实给出「富化警告 1」**。
+  补齐了 A1（审计发现：单条快照编码错误曾拖垮整批，违反 AGENTS §2.7）在**CLI 全链路**上的覆盖，
+  此前只有 Collector 层的单测。
+
+### Changed（流程）
+
+- **证据日志改为 verbose**：审计第 12 轮指出「`pipeline-tests.log` 仅含尾部摘要（`Ran N tests OK`），
+  未列出用例名，无法核对新增用例是否真的执行」。此后出包所附日志一律用 `-v` 运行，
+  日志中可逐条看到用例名与结果。
+- `EVIDENCE-CONVENTIONS.md` 同步记录该要求（含本节）。
+
+### Verified
+
+- `tests.test_cli_canonical`：**18/18 绿**（新增 1 个 CLI 级 A1 用例）。
+- 全量：**654 用例**；失败集与改动前逐条比对：新增 0 / 消失 0 → 零回归。
+
+---
+
 ## [Phase 5 · CLI 安全与验收] 2026-10-10 — `rebuild-index --db` 覆盖 + 真实数据 CLI 验收
 
 ### Added

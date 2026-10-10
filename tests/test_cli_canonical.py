@@ -54,7 +54,8 @@ class CliCanonicalTestCase(unittest.TestCase):
         self.upstream = self.root / "upstream"
         self.upstream.mkdir(parents=True)
         shutil.copy2(FIXTURE, self.upstream / "bookmarks.jsonl")
-        (self.root / "data" / "raw").mkdir(parents=True)
+        self.raw = self.root / "data" / "raw"
+        self.raw.mkdir(parents=True)
         self.normalized = self.root / "data" / "normalized"
         self.knowledge = self.root / "knowledge" / "X-Bookmarks"
         self.config = self._write_config()
@@ -100,6 +101,23 @@ class NormalizeTests(CliCanonicalTestCase):
         plan = scan_normalized(self.normalized)
         self.assertEqual(plan.failures, ())          # 全部通过 Canonical 校验
         self.assertEqual(plan.indexable, len(files))
+
+    def test_non_utf8_enrichment_snapshot_does_not_break_batch(self):
+        """审计 A1 回归（**CLI 级**）：单条富化快照非 UTF-8 不得拖垮整批（AGENTS §2.7）。
+
+        单测覆盖了 Collector 层；本用例补 CLI 全链路：上游全部条目仍应落盘，
+        且报告如实给出「富化警告」数量，进程退出码仍为 0。
+        """
+
+        ids = [json.loads(line)["tweetId"]
+               for line in FIXTURE.read_text(encoding="utf-8").splitlines() if line.strip()]
+        (self.raw / f"{ids[0]}.json").write_bytes(bytes([0xFF, 0xFE]) + b"{not valid utf-8")
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = self.run_cli("normalize", "--apply")
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(len(self.normalized_files()), len(ids))
+        self.assertIn("富化警告 1", buffer.getvalue())
 
     def test_second_apply_is_idempotent(self):
         self.run_cli("normalize", "--apply")
