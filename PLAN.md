@@ -32,6 +32,7 @@
 | 1 | 架构设计 | ✅ 完成 | `ARCHITECTURE.md`（六层架构 + 决策 R1–R7） |
 | 2 | Canonical Schema | ✅ 完成（2026-10-08） | `schema/bookmark.schema.json` + `src/canonical/validate.py` + `tests/test_schema.py`（28 用例） |
 | 3 | Collector Adapter | ✅ 完成（2026-10-08，已提交 `498236a`） | `src/collector/raw_data.py` + `src/collector/fieldtheory/` + `src/normalizer/` + `tests/test_{raw_data,fieldtheory_collector,normalizer}.py`（133 用例） |
+| 5 | CLI | 🔄 **起步**（决策无关部分：`normalize`/`render` dry-run 入口 + `xbk` 声明；S2/R1 待裁定） |
 | 4 | Storage | ✅ **完成**（Step 1–5：JSON 投影 + Markdown 投影 + SQLite 索引 R6 + rebuild-index + 真实数据只读验收） | Markdown / JSON / SQLite 索引 + `rebuild-index` |
 | 5 | CLI | ⏳ 待开始 | `xbk` 入口 + 命令对齐 |
 | 6 | Cross Platform | ⏳ 待开始 | Windows + macOS 验证（修复 9 个平台断言，需先复核基线数字） |

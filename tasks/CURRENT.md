@@ -63,7 +63,12 @@
   三处 tweet_id 集合一致、content_hash 逐条一致、二次写入 **0 写**、
   整库重建后运行态回初始态、真实 `data/`+`knowledge/` 指纹**前后未变**（只读证明）。
 - **Phase 4 五个 Step 全部交付** → 完成报告：`docs/X-Bookmark-Knowledge-Phase4-Report-2026-10-10.md`
-- **下一步 Phase 5（CLI）**：前置需裁定 S2（Collector Protocol 拆分）与 R1（新旧模块关系）
+- **Phase 5 已起步（决策无关部分，2026-10-10）**：
+  - `normalize`（上游 → Canonical JSON）与 `render`（Canonical → Markdown）两个子命令，**均默认只演练**；
+  - `pyproject.toml` 声明 `xbk` 入口（需 `pip install -e .` 生效，未执行安装）；
+  - `tests/test_cli_canonical.py` 12 用例；全量 647 用例零回归。
+- **Phase 5 其余部分仍待裁定**：S2（Collector Protocol 拆分）与 R1（新旧模块关系）——
+  选项与影响见 `X-Bookmark-Knowledge-Automation/docs/PHASE5-PREP-BRIEF.md`
 
 - **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
 - **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影

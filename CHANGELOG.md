@@ -44,6 +44,37 @@
 
 ---
 
+## [Phase 5 · 起步] 2026-10-10 — CLI 规范化入口（决策无关部分）
+
+> 说明：Phase 5 的**完整范围**取决于待裁定项 **S2**（Collector Protocol 拆分）与
+> **R1**（新旧模块并存/替换），见 `X-Bookmark-Knowledge-Automation/docs/PHASE5-PREP-BRIEF.md`。
+> 本次只交付**不依赖这两项决策**的部分，且全部默认 dry-run，未触碰真实数据。
+
+### Added
+
+- `src/cli/main.py` 新增两个子命令：
+  - **`normalize`**：上游 `bookmarks.jsonl`（+ `data/raw/` 富化）→ Canonical 校验 →
+    `data/normalized/{tweet_id}.json`（原子写 + `content_hash` 幂等）。
+    **默认只演练**（不创建/不修改任何文件），`--apply` 才落盘；支持 `--limit`、
+    可覆盖 `--upstream-dir/--raw-dir/--normalized-dir`。
+  - **`render`**：`data/normalized/*.json` → `knowledge/X-Bookmarks/{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`。
+    **内容不同则不覆盖**（AGENTS §14）：相同跳过、不同记为冲突且原文件不变，仅 `--overwrite` 改写；
+    **默认只演练**，`--apply` 才落盘。
+- `pyproject.toml`：声明 `xbk` 入口（`[project.scripts] xbk = "src.cli.main:main"`，决策 D4）。
+  **需 `pip install -e .` 才生效**（安装动作未执行）；未安装时仍用 `python -m src.cli`，入口函数相同。
+- `tests/test_cli_canonical.py`：**12 用例** —— normalize 的演练不落盘 / `--apply` 落盘 /
+  二次幂等（mtime 不变）/ `--limit` / 上游缺失非零退出；render 的演练不落盘 / `--apply` 写盘 /
+  **冲突不覆盖** / `--overwrite` 改写 / 目录缺失返回配置错误；`pyproject` 入口声明与可导入性。
+
+### Verified
+
+- `tests.test_cli_canonical`：**12/12 绿**；变异测试 **3/3 被捕获**
+  （render 强制覆盖 / render 演练也落盘 / normalize 演练也落盘）。
+- 全量：**647 用例**；失败集与改动前日志**逐条比对：新增 0 / 消失 0** → 零回归。
+- 全部在临时项目目录 + 仓库自带合成 fixture；**未触真实 `data/`、`knowledge/`**；未联网；无新增依赖。
+
+---
+
 ## [Phase 4 · Step 5 + Phase 4 收尾] 2026-10-10 — 真实数据只读 dry-run 验收（Phase 4 完成）
 
 ### Verified（真实数据**只读** dry-run，10 项全通过）

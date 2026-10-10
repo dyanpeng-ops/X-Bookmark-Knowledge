@@ -40,10 +40,17 @@ from src.database import (
     utc_now_iso,
 )
 from src.ingest import Ingestor, IngestStats
+from src.canonical.validate import CanonicalValidationError
+from src.collector.base import CollectorError
+from src.collector.fieldtheory.adapter import FieldTheoryCollector
+from src.normalizer.fieldtheory import FieldTheoryNormalizer
+from src.storage.json_projection import write_all_canonical_json
+from src.storage.markdown_projection import write_all_markdown
 from src.storage.rebuild import (
     RUNTIME_RESET_NOTE,
     RebuildError,
     rebuild_index,
+    scan_normalized,
 )
 
 __all__ = ["EXIT_OK", "EXIT_FAILURE", "EXIT_CONFIG", "EXIT_UPSTREAM", "build_parser", "main"]
@@ -101,6 +108,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="只抓取并报告结果，不写文件、不写数据库",
     )
 
+    normalize = sub.add_parser(
+        "normalize",
+        help="把上游原始数据规范化为 Canonical JSON（默认只演练）",
+        description=(
+            "读取上游 bookmarks.jsonl（+ data/raw/ 富化快照），经 Canonical 契约校验后写出\n"
+            "data/normalized/{tweet_id}.json（原子写 + content_hash 幂等）。\n\n"
+            "默认**只演练**：不创建、不修改任何文件；确认无误后加 --apply 落盘。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    normalize.add_argument("--upstream-dir", help="上游目录（默认 config 的 upstream_data_dir，回退 <data_dir>/upstream）")
+    normalize.add_argument("--raw-dir", help="富化快照目录（默认配置的 raw_dir）")
+    normalize.add_argument("--normalized-dir", help="输出目录（默认 <data_dir>/normalized）")
+    normalize.add_argument("--limit", type=int, help="只处理前 N 条（演练用）")
+    normalize.add_argument("--apply", action="store_true", help="真正落盘（默认只演练）")
+
+    render = sub.add_parser(
+        "render",
+        help="把 Canonical JSON 渲染为知识库 Markdown（默认只演练）",
+        description=(
+            "读取 data/normalized/*.json，渲染到 knowledge/X-Bookmarks/{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md。\n\n"
+            "**内容不同则不覆盖**（AGENTS §14）：内容相同跳过；不同则记为冲突且原文件保持不变，\n"
+            "仅在显式 --overwrite 时改写。默认**只演练**：不创建、不修改任何文件。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    render.add_argument("--normalized-dir", help="Canonical JSON 目录（默认 <data_dir>/normalized）")
+    render.add_argument("--knowledge-dir", help="知识库目录（默认配置的 knowledge_dir）")
+    render.add_argument("--overwrite", action="store_true", help="允许覆盖内容不同的既有 Markdown")
+    render.add_argument("--apply", action="store_true", help="真正落盘（默认只演练）")
+
     status = sub.add_parser("status", help="只读状态展示")
     status.add_argument("--json", action="store_true", help="以 JSON 输出")
 
@@ -153,6 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "status": _cmd_status,
             "doctor": _cmd_doctor,
             "rebuild-index": _cmd_rebuild_index,
+            "normalize": _cmd_normalize,
+            "render": _cmd_render,
         }
         return dispatch[args.command](args, config)
     finally:
@@ -1006,3 +1046,91 @@ def _cmd_rebuild_index(args: argparse.Namespace, config: AppConfig) -> int:
             print(f"           - {name}: {reason}")
         return EXIT_FAILURE
     return EXIT_OK
+
+
+def _cmd_normalize(args: argparse.Namespace, config: AppConfig) -> int:
+    """`normalize`：上游 → Canonical JSON（默认只演练，不写盘）。"""
+
+    upstream_dir = Path(args.upstream_dir) if args.upstream_dir else (
+        config.collector.upstream_data_dir or (config.paths.data_dir / "upstream")
+    )
+    raw_dir = Path(args.raw_dir) if args.raw_dir else config.paths.raw_dir
+    normalized_dir = Path(args.normalized_dir) if args.normalized_dir else (
+        config.paths.data_dir / "normalized"
+    )
+
+    adapter = FieldTheoryAdapter(
+        executable=config.collector.command, data_dir=upstream_dir, retries=2
+    )
+    collector = FieldTheoryCollector(adapter=adapter, raw_dir=raw_dir)
+    try:
+        raw_data = collector.collect()
+    except CollectorError as exc:
+        print(f"[fail] {exc}", file=sys.stderr)
+        return EXIT_UPSTREAM
+    except OSError as exc:
+        print(f"[fail] {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+
+    try:
+        bookmarks = FieldTheoryNormalizer().normalize_and_validate(raw_data)
+    except CanonicalValidationError as exc:
+        print(f"[fail] canonical 校验失败: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    if args.limit:
+        bookmarks = bookmarks[: max(0, args.limit)]
+
+    mode = "APPLY" if args.apply else "DRY-RUN"
+    print(f"[{mode}] upstream : {upstream_dir}")
+    print(f"         enrichment: {raw_dir}")
+    print(f"         output    : {normalized_dir}")
+    print(f"         canonical : {len(bookmarks)} 条通过校验"
+          f"（富化警告 {len(getattr(collector, 'last_warnings', ()) or ())}）")
+    if not args.apply:
+        print("         演练模式  : 未创建/未修改任何文件；加 --apply 落盘")
+        return EXIT_OK
+
+    report = write_all_canonical_json(bookmarks, normalized_dir)
+    created = sum(1 for outcome in report.outcomes if outcome.reason == "created")
+    unchanged = sum(1 for outcome in report.outcomes if outcome.reason == "unchanged")
+    print(f"         落盘完成  : created={created} unchanged={unchanged} "
+          f"failures={len(report.failures)}")
+    for label, reason in report.failures[:10]:
+        print(f"           - {label}: {reason}")
+    return EXIT_OK if report.ok else EXIT_FAILURE
+
+
+def _cmd_render(args: argparse.Namespace, config: AppConfig) -> int:
+    """`render`：Canonical JSON → Markdown（默认只演练；不覆盖内容不同的既有文件）。"""
+
+    normalized_dir = Path(args.normalized_dir) if args.normalized_dir else (
+        config.paths.data_dir / "normalized"
+    )
+    knowledge_dir = Path(args.knowledge_dir) if args.knowledge_dir else config.paths.knowledge_dir
+
+    try:
+        plan = scan_normalized(normalized_dir)
+    except RebuildError as exc:
+        print(f"[fail] {exc}", file=sys.stderr)
+        return EXIT_CONFIG
+
+    mode = "APPLY" if args.apply else "DRY-RUN"
+    print(f"[{mode}] normalized: {normalized_dir}")
+    print(f"         knowledge : {knowledge_dir}")
+    print(f"         scanned   : {plan.scanned} 个 JSON（可渲染 {plan.indexable}）")
+    if plan.failures:
+        print(f"         failures  : {len(plan.failures)}")
+        for name, reason in plan.failures[:10]:
+            print(f"           - {name}: {reason}")
+    if not args.apply:
+        print("         演练模式  : 未创建/未修改任何文件；加 --apply 落盘")
+        return EXIT_FAILURE if plan.failures else EXIT_OK
+
+    report = write_all_markdown(
+        [entry.bookmark for entry in plan.entries], knowledge_dir, overwrite=args.overwrite
+    )
+    print(f"         渲染完成  : written={report.written} conflicts={report.conflicts} "
+          f"failures={len(report.failures)}")
+    for label, reason in report.failures[:10]:
+        print(f"           - {label}: {reason}")
+    return EXIT_OK if (report.ok and not plan.failures) else EXIT_FAILURE

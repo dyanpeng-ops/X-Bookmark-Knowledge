@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "x-bookmark-knowledge"
+version = "0.1.0"
+description = "X Bookmark Knowledge Pipeline（Canonical → Markdown/SQLite → Knowledge-Agent）"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+# `xbk` 入口（ARCHITECTURE §10 决策 D4）：需 `pip install -e .` 后生效；
+# 未安装时仍可用 `python -m src.cli`（两者入口函数相同）。
+xbk = "src.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["src*"]
