@@ -152,6 +152,30 @@ class FullRebuildTests(RebuildTestCase):
         self.assertEqual(report.runtime_initial_state, 3)
         self.assertEqual(len(self.snapshot()), 3)
 
+    def test_corrupt_database_raises_domain_error(self):
+        """目标文件存在但不是合法 SQLite ⇒ 领域错误（而非原始 sqlite3 异常）。"""
+
+        self.seed_normalized(1)
+        self.db.parent.mkdir(parents=True, exist_ok=True)
+        self.db.write_bytes(b"this is not a sqlite database")
+        # 用 --in-place：整库重建会先删掉旧库，只有就地刷新才会**打开**既有库
+        with self.assertRaises(RebuildError) as ctx:
+            rebuild_index(self.normalized, db_path=self.db, apply=True, in_place=True, now=NOW)
+        message = str(ctx.exception)
+        self.assertIn("损坏", message)
+        # 不静默销毁用户文件
+        self.assertEqual(self.db.read_bytes(), b"this is not a sqlite database")
+
+    def test_full_rebuild_replaces_corrupt_database(self):
+        """整库重建的语义是「删库重建」：损坏文件被备份/替换，不应因读不动而失败。"""
+
+        self.seed_normalized(1)
+        self.db.parent.mkdir(parents=True, exist_ok=True)
+        self.db.write_bytes(b"garbage")
+        report = rebuild_index(self.normalized, db_path=self.db, apply=True, now=NOW)
+        self.assertEqual(report.inserted, 1)
+        self.assertIsNotNone(report.backup_path)          # 旧文件已备份（未静默丢失）
+
     def test_content_index_identical_after_deleting_db(self):
         """任务书 S4 指定：删库 → 重建 → 内容索引一致。"""
 

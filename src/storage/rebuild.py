@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -161,8 +162,12 @@ def rebuild_from_plan(
     if not in_place:
         backup_path = _discard_database(db, backup=backup, stamp=stamp)
 
-    connection = connect(db)
+    # SQLite 是**惰性**的：打开一个非 SQLite/损坏的文件时 connect() 不会报错，
+    # 首次真正读表才抛 DatabaseError。因此把「打开 + 全部读写」一起纳入领域错误转换。
+    # 注意：整库重建（in_place=False）会先删掉旧库，所以此路径主要保护 --in-place。
+    connection = None
     try:
+        connection = connect(db)
         store = IndexStore(connection)
         inserted = updated = unchanged = 0
         for entry in plan.entries:
@@ -181,8 +186,14 @@ def rebuild_from_plan(
         runtime_initial = int(
             connection.execute("SELECT COUNT(*) FROM bookmarks").fetchone()[0]
         ) if not in_place else None
+    except sqlite3.DatabaseError as exc:
+        raise RebuildError(
+            f"索引库无法打开或已损坏：{db}；"
+            f"建议先备份该文件（或换 --db 指向新路径）后重试。原始错误：{exc}"
+        ) from exc
     finally:
-        connection.close()
+        if connection is not None:
+            connection.close()
 
     return RebuildReport(
         plan=plan,
