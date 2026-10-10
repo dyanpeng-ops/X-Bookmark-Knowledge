@@ -44,6 +44,25 @@
 
 ---
 
+## [Phase 5 · 任务书] 2026-10-10 — 新增 `tasks/PHASE-5-CLI.md`
+
+### Added
+
+- `tasks/PHASE-5-CLI.md`：Phase 5 的任务边界与验收标准，供每个审计包附作 `TASK.md`
+  （协议 §2 第 1 项）。内容：目标、已交付命令（含 `normalize`/`render`/`rebuild-index`/
+  `status`/`doctor`）与各自**默认演练**语义、待裁定后才能做的两项（S2/R1）、
+  7 条验收标准（A1–A7）、明确不在范围、待裁定清单。
+
+动因：第 10/12 轮审计均指出「包内缺 `TASK.md`（协议 §2 第 1 项）」——此前 Phase 5 没有任务书，
+只能用 `ACCEPTANCE.md` + `change-summary.md` 代偿。此文件补上该缺口。
+
+### Noted
+
+- 同批（自动化侧）新增 `scripts/mutation-check`：把"变异 N/N 被捕获"变成**可随包附上的日志**
+  （第 10/12 轮审计均指出该断言无日志可复核）。实测 project 5/5 + automation 1/1 = **6/6 被捕获**。
+
+---
+
 ## [Phase 5 · 可观测性补全] 2026-10-10 — `doctor` 检查 Canonical 目录 + 打包期证据新鲜度硬护栏
 
 ### Added
