@@ -309,6 +309,17 @@ class CliTests(RebuildTestCase):
         self.assertTrue(self.db.exists())
         self.assertEqual(len(self.snapshot()), 2)
 
+    def test_cli_db_override_writes_temp_database(self):
+        """--db 覆盖：验收时可指向临时库，不碰真实 data/state/。"""
+
+        self.seed_normalized(2)
+        temp_db = self.root / "tmp-index" / "index.db"
+        code = main(["--config", str(self._config()), "rebuild-index", "--apply",
+                     "--db", str(temp_db)])
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(temp_db.is_file())
+        self.assertFalse(self.db.exists())          # 真实库未被创建/写入
+
     def test_cli_missing_normalized_dir_returns_config_error(self):
         code = main(["--config", str(self._config()), "rebuild-index", "--apply",
                      "--normalized-dir", str(self.root / "nope")])

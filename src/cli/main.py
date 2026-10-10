@@ -162,6 +162,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="不删库：按 content_hash 幂等刷新内容索引，运行态原样保留",
     )
     rebuild.add_argument("--no-backup", action="store_true", help="重建前不备份旧库（默认备份为 state.db.bak-<UTC>）")
+    rebuild.add_argument(
+        "--db",
+        help="覆盖索引库路径（默认配置的 state_db）——用于在临时库上验收，避免写入真实 data/state/",
+    )
 
     return parser
 
@@ -1045,7 +1049,7 @@ def _cmd_rebuild_index(args: argparse.Namespace, config: AppConfig) -> int:
         config.paths.data_dir / "normalized"
     )
     raw_dir = Path(args.raw_dir) if args.raw_dir else config.paths.raw_dir
-    db_path = config.paths.state_db_path
+    db_path = Path(args.db) if getattr(args, "db", None) else config.paths.state_db_path
 
     try:
         report = rebuild_index(

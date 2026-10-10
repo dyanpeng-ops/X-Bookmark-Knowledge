@@ -44,6 +44,40 @@
 
 ---
 
+## [Phase 5 · CLI 安全与验收] 2026-10-10 — `rebuild-index --db` 覆盖 + 真实数据 CLI 验收
+
+### Added
+
+- `src/cli/main.py`：`rebuild-index` 新增 **`--db`** 覆盖参数（与 `--normalized-dir` / `--raw-dir`
+  一致）。动因：此前 `--apply` 只能写配置里的真实 `data/state/state.db`，
+  **无法在临时库上验收**；有了 `--db` 才能在不碰真实数据的前提下跑通 `--apply` 全链路。
+- 自动化侧 `scripts/cli-realdata-acceptance`：**真实数据 CLI 级验收**（与库级 `step5-dryrun` 互补）。
+
+### Verified（真实数据 CLI 验收，10/10 通过）
+
+用**临时配置**（输入指向真实 `data/upstream`、`data/raw`；所有可写路径指向临时目录）执行：
+
+| 步骤 | 结果 |
+|---|---|
+| `normalize`（演练） | exit 0，canonical 5 条 |
+| `normalize --apply`（临时目录） | 写出 5 个 Canonical JSON |
+| `render`（演练） | exit 0，且**未创建**知识库目录 |
+| `render --apply`（临时目录） | 5 个 Markdown |
+| `rebuild-index`（演练） | exit 0，且**未创建**数据库 |
+| `rebuild-index --apply --db <临时库>` | inserted=5 |
+| 三处 tweet_id 集合一致 | json=5 md=5 db=5 |
+| `status --json` / `doctor`（只读） | 均正常输出（doctor 含新检查项）|
+| 真实 `data/`、`knowledge/` 指纹 | **前后未变** |
+
+### Noted
+
+- 实测发现：直接用**真实配置**跑 CLI 会在真实 `data/` 下**新建当日日志文件**并触碰 `state.db` 的
+  mtime（正常产品行为）。因此"零写入"验收必须走临时配置——本脚本已如此实现。
+- `doctor` 在本机 macOS 因上游 `fieldtheory.cmd` 不在 PATH 而 FAILED（**环境事实**，非缺陷）；
+  验收中记录该退出码并说明。
+
+---
+
 ## [Phase 5 · 任务书] 2026-10-10 — 新增 `tasks/PHASE-5-CLI.md`
 
 ### Added
