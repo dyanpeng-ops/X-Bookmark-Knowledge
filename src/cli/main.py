@@ -40,6 +40,11 @@ from src.database import (
     utc_now_iso,
 )
 from src.ingest import Ingestor, IngestStats
+from src.storage.rebuild import (
+    RUNTIME_RESET_NOTE,
+    RebuildError,
+    rebuild_index,
+)
 
 __all__ = ["EXIT_OK", "EXIT_FAILURE", "EXIT_CONFIG", "EXIT_UPSTREAM", "build_parser", "main"]
 
@@ -101,6 +106,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("doctor", help="环境自检")
 
+    rebuild = sub.add_parser(
+        "rebuild-index",
+        help="从 normalized/*.json 重建 SQLite 内容索引（删库重建）",
+        description=(
+            "扫描 normalized/*.json（CanonicalBookmark）重建 SQLite 内容索引。\n\n"
+            + RUNTIME_RESET_NOTE
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rebuild.add_argument("--normalized-dir", help="Canonical JSON 目录（默认 <data_dir>/normalized）")
+    rebuild.add_argument("--raw-dir", help="原始快照目录（填充 raw_json_path；默认配置的 raw_dir）")
+    rebuild.add_argument("--apply", action="store_true", help="真正执行（默认只演练并报告，不改任何文件）")
+    rebuild.add_argument(
+        "--in-place",
+        action="store_true",
+        help="不删库：按 content_hash 幂等刷新内容索引，运行态原样保留",
+    )
+    rebuild.add_argument("--no-backup", action="store_true", help="重建前不备份旧库（默认备份为 state.db.bak-<UTC>）")
+
     return parser
 
 
@@ -128,6 +152,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "links": _cmd_links,
             "status": _cmd_status,
             "doctor": _cmd_doctor,
+            "rebuild-index": _cmd_rebuild_index,
         }
         return dispatch[args.command](args, config)
     finally:
@@ -937,3 +962,47 @@ def _probe_writable_dir(path: Path) -> tuple[bool, str]:
         return True, str(path)
     except OSError as exc:
         return False, f"{path}: {exc}"
+
+
+def _cmd_rebuild_index(args: argparse.Namespace, config: AppConfig) -> int:
+    """`rebuild-index`：从 `normalized/*.json` 重建内容索引（默认只演练）。"""
+
+    normalized_dir = Path(args.normalized_dir) if args.normalized_dir else (
+        config.paths.data_dir / "normalized"
+    )
+    raw_dir = Path(args.raw_dir) if args.raw_dir else config.paths.raw_dir
+    db_path = config.paths.state_db_path
+
+    try:
+        report = rebuild_index(
+            normalized_dir,
+            db_path=db_path,
+            apply=bool(args.apply),
+            in_place=bool(args.in_place),
+            backup=not args.no_backup,
+            raw_dir=raw_dir,
+        )
+    except RebuildError as exc:
+        print(f"[fail] {exc}", file=sys.stderr)
+        return EXIT_CONFIG
+
+    mode = "APPLY" if report.applied else "DRY-RUN"
+    print(f"[{mode}] normalized: {report.plan.normalized_dir}")
+    print(f"         index db  : {report.db_path}")
+    print(f"         scanned   : {report.plan.scanned} 个 JSON（可索引 {report.plan.indexable}）")
+    if report.applied:
+        if report.in_place:
+            print(f"         in-place  : inserted={report.inserted} updated={report.updated} "
+                  f"unchanged={report.unchanged}（运行态保留）")
+        else:
+            print(f"         重建完成  : inserted={report.inserted}（运行态重置为初始态）")
+            if report.backup_path:
+                print(f"         旧库备份  : {report.backup_path}")
+    else:
+        print("         演练模式  : 未改任何文件；加 --apply 执行")
+    if report.plan.failures:
+        print(f"         failures  : {len(report.plan.failures)}")
+        for name, reason in report.plan.failures[:10]:
+            print(f"           - {name}: {reason}")
+        return EXIT_FAILURE
+    return EXIT_OK

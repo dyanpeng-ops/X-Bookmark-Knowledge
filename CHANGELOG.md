@@ -44,6 +44,33 @@
 
 ---
 
+## [Phase 4 · Step 4] 2026-10-10 — rebuild-index（删库重建内容索引）
+
+### Added
+
+- `src/storage/rebuild.py` —— 决策 D4 指定的重建实现：
+  - `scan_normalized()`：扫描 `data/normalized/{tweet_id}.json`，逐条 `validate_bookmark`；
+    坏 JSON / 非法 Canonical / **重复 tweet_id** 记入 `failures` 而**不中断扫描**（AGENTS §2.7）；
+  - `rebuild_index()`：两种模式 —— **整库重建**（备份旧库 → 建新库 → 写内容索引 ⇒ 运行态回初始态，R6）
+    与 **`in_place`**（按 `content_hash` 幂等刷新，**运行态原样保留**）；
+  - 旧库默认备份为 `state.db.bak-<UTC>`（含 WAL/SHM 清理），可 `backup=False` 跳过；
+  - `RUNTIME_RESET_NOTE`：把 R6「运行态重建即重置」的逐字段说明做成常量，供 CLI 帮助文本复用。
+- `src/cli/main.py`：新增 `rebuild-index` 子命令 —— `--normalized-dir` / `--raw-dir` /
+  `--apply`（默认**只演练**，不创建/不修改任何文件）/ `--in-place` / `--no-backup`；
+  帮助文本含重置语义（D4 明确要求）。
+- `tests/test_storage_rebuild.py` —— **22 用例**：扫描与容错、演练不落盘、
+  **删库→重建→内容索引逐条一致**、运行态重置、备份与免备份、字段映射、
+  `--in-place` 幂等且保留运行态、CLI（帮助含重置语义 / 演练 / apply / 目录缺失 EXIT_CONFIG / 失败非零退出）。
+
+### Verified
+
+- `tests.test_storage_rebuild`：**22/22 绿**；变异测试 **2/2 被捕获**
+  （不丢弃旧库 → 2 个用例失败；字段映射写错 → 3 个用例失败）。
+- 全量：**635 用例**；失败集与改动前的全量日志**逐条比对：新增 0 / 消失 0** → 零回归。
+- 全部在临时目录；未触真实 `data/`、`knowledge/`；未联网；无新增依赖。
+
+---
+
 ## [Phase 4 · Step 3] 2026-10-09 — SQLite 索引（R6 字段二分落地）
 
 ### Added

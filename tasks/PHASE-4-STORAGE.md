@@ -48,7 +48,7 @@ Knowledge-Agent、AI 分类/摘要/标签、Embedding/RAG、外链抓取、新 S
 | S1 | **JSON 投影**：路径布局、原子写（临时文件+替换）、内容未变跳过、非法 Canonical 拒绝 | `tests/test_storage_json.py` 全绿 |
 | S2 ✅ | **Markdown 投影**：路径 `{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`、frontmatter 14 键、正文两段式、不覆盖内容不同的既有文件 | ✅ 已交付：`src/storage/markdown_projection.py` + `tests/test_storage_markdown.py`（30 用例）；全量零回归 |
 | S3 ✅ | **SQLite 索引**：表结构按 R6 两类划分；写入/更新幂等 | ✅ 已交付：新增 19 用例 + 既有 database 层 70/70 不回归 |
-| S4 | **rebuild-index**：删库重建；运行态重置 | 新增测试（含「删库→重建→内容索引一致」） |
+| S4 ✅ | **rebuild-index**：删库重建；运行态重置 | ✅ 已交付：`src/storage/rebuild.py` + CLI；22 用例（含「删库→重建→内容索引一致」）|
 | S5 | 全量回归 + 真实数据**只读 dry-run** 验收（需另行批准） | 报告 |
 
 ## 5. 验收标准
@@ -89,7 +89,7 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
 | S1 JSON 投影 | ✅ 已完成 | `src/storage/json_projection.py`；30 用例（含审计 F-001/F-004 回归）；Muse 第 2 轮复审 **PASS**（`RUN-20261009T134544Z-r5r2`）|
 | S2 Markdown 投影 | ✅ 已完成 | `src/storage/markdown_projection.py`；`tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 被捕获；全量 **592 用例**失败集 md5 未变（零回归）|
 | S3 SQLite 索引（R6 两类字段） | ✅ 已完成 | `src/database/r6_fields.py` + `index_store.py` + `schema.py`（migration 3）；`tests/test_database_r6.py` **19 用例**；全量失败集与基线一致（零回归）|
-| S4 `rebuild-index` | ⏳ 待开工 | — |
+| S4 `rebuild-index` | ✅ 已完成 | `src/storage/rebuild.py` + `src/cli/main.py`（`rebuild-index`）；`tests/test_storage_rebuild.py` **22 用例**；全量零回归 |
 | S5 全量验收 + 真实数据 dry-run | ⏳ 待批准 | — |
 
 ### S2 实现要点
@@ -130,3 +130,19 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
 migration 3 让两个**硬编码 schema 版本**的断言暴露出来，已改为引用 `SCHEMA_VERSION` / `MIGRATIONS`：
 `tests/test_database.py::test_upgrades_legacy_v1_database_to_latest`（`[2]`）、
 `tests/test_cli.py::test_status_json_reports_database_and_upstream`（`current_version == 2`）。
+
+### S4 实现要点（D4 + R6）
+
+- **位置遵循 D4**：`src/storage/rebuild.py` + CLI 接线（`rebuild-index`）。
+- **扫描** `data/normalized/{tweet_id}.json`：逐条 `validate_bookmark` 校验；
+  坏 JSON / 非法 Canonical / **重复 tweet_id** 记入 failures 但**不中断扫描**（AGENTS §2.7）。
+- **两种模式**：
+  - 整库重建（默认）：备份旧库 → 建新库 → 逐条写内容索引 ⇒ **运行态回初始态**（R6）；
+  - `--in-place`：不删库，按 `content_hash` 幂等刷新内容索引，**运行态原样保留**
+    （用于"索引坏了但处理进度要留着"）。
+- **默认只演练**：不带 `--apply` 时**不创建/不修改任何文件**（重建会丢弃运行态，属不可逆操作）。
+- **旧库备份**：默认备份为 `state.db.bak-<UTC>`（WAL/SHM 一并处理），`--no-backup` 跳过。
+- **重置语义写进帮助**（D4 明确要求）：`rebuild-index --help` 的 description 含
+  `RUNTIME_RESET_NOTE`，逐字段列明哪些会被重置、哪些可重建。
+- **字段映射**：`username ← author_username`、`author_name ← author`（Canonical D2 语义）、
+  `tweet_text ← text`、`tweet_url ← url`、`markdown_path` 用确定性相对路径。

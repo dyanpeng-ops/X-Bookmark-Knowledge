@@ -52,7 +52,13 @@
   - `src/database/schema.py`：`MIGRATION_3` 补 `bookmarks.content_hash` + 索引（**原表没有这一列**）
   - `src/database/index_store.py`：幂等写入（同 hash 不写盘；只改内容列）+ 运行态重置
   - `tests/test_database_r6.py` **19 用例**；既有 database 层 70/70；全量失败集与基线一致
-- **Step 4–5 待续**：`rebuild-index`（删库重建 + 运行态重置语义写进命令帮助）→ 全量验收（真实数据只读 dry-run 需批准）
+- **Step 4 已完成**（`rebuild-index`，D4 + R6）：
+  - `src/storage/rebuild.py`：扫描 `data/normalized/*.json` 重建内容索引；两种模式
+    （整库重建 ⇒ 运行态回初始态；`--in-place` ⇒ 幂等刷新且**保留运行态**）
+  - CLI `rebuild-index`：默认**只演练**，须 `--apply` 才落盘；旧库自动备份 `state.db.bak-<UTC>`
+  - **重置语义写进 `--help`**（D4 要求）；`tests/test_storage_rebuild.py` **22 用例**
+  - 含任务书指定用例：**删库 → 重建 → 内容索引逐条一致**
+- **Step 5 待续**：全量验收（真实数据**只读 dry-run**，需另行批准）
 
 - **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
 - **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影

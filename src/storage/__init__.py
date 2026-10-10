@@ -10,6 +10,13 @@
 不写 Markdown/知识库（由 :mod:`src.markdown` 负责）；所有写盘均为「先临时文件、后原子替换」。
 """
 
+from .rebuild import (
+    RebuildError,
+    RebuildPlan,
+    RebuildReport,
+    rebuild_index,
+    scan_normalized,
+)
 from .markdown_projection import (
     MarkdownConflict,
     MarkdownProjectionError,
@@ -40,6 +47,11 @@ __all__ = [
     "render_markdown",
     "write_all_markdown",
     "write_markdown",
+    "RebuildError",
+    "RebuildPlan",
+    "RebuildReport",
+    "rebuild_index",
+    "scan_normalized",
     "InvalidCanonicalBookmark",
     "JsonProjectionOutcome",
     "JsonProjectionReport",
