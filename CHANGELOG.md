@@ -104,6 +104,33 @@
 
 ---
 
+## [Phase 5 · 契约] 2026-10-10 — `status --json` 机器可读契约冻结
+
+### Added
+
+- `tests/test_cli_json_contract.py`：**8 个契约用例**，冻结 `status --json` 的对外形状：
+  顶层键集合（`config`/`database`/`upstream`/`canonical`）、各分区必需键与类型、
+  `canonical.pipeline` 的取值、以及「normalized 目录缺失 / 存在」两种情形下的稳定性，
+  并断言 `--json` **只输出 JSON**（不夹带人类可读文本）。
+  动因：该载荷会被 Phase 8 与外部集成消费，**键改名/删除会静默破坏消费者**，
+  而此前测试只断言了其中少数几个键。
+
+### Changed
+
+- `src/cli/main.py`：把 `status --json` 的 `canonical` 分区提取为 `_canonical_status()`。
+  这不是功能变更，而是让**变异测试**能真正作用到"契约是否被断言保护"这件事上
+  （提取后新增变异「分区缺少 pipeline 键」→ 被捕获）。
+
+### Verified
+
+- 新契约用例 **8/8 绿**；全量 **671 用例**（+8），失败集与基线**逐条一致**
+  （失败集 md5 仍为 `31571afa1164be8c7fda267cf6e53641`）。
+- 项目区变异 **10/10** 被捕获（新增「canonical 分区缺少 pipeline 键」→ 捕获 2 个用例）。
+- 注意：冻结集最初按**印象**写成 `path` 等键，与真实载荷不符 —— **被契约测试当场纠正**
+  （真实为 `counts`/`schema`/`total`/`links`/`last_synced_at`），这正是契约测试的价值。
+
+---
+
 ## [Phase 5 · 证据质量] 2026-10-10 — CLI 级 A1 回归 + 证据日志改 verbose
 
 ### Added

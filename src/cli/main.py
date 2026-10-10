@@ -815,6 +815,25 @@ def _print_report(
 # ── status ───────────────────────────────────────────────────────────────────
 
 
+def _canonical_status(config: Config) -> dict[str, object]:
+    """`status --json` 的 `canonical` 分区。
+
+    单独成函数的原因：该分区是**机器可读契约**的一部分（见
+    `tests/test_cli_json_contract.py`），提取后变异测试才能验证它确实被断言保护。
+    """
+
+    normalized_dir = config.paths.data_dir / "normalized"
+    return {
+        "normalized_dir": str(normalized_dir),
+        "normalized_files": (
+            len([item for item in normalized_dir.glob("*.json")])
+            if normalized_dir.is_dir()
+            else 0
+        ),
+        "pipeline": ["normalize", "render", "rebuild-index"],
+    }
+
+
 def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
     """只读展示：配置、状态库、上游数据现状。"""
 
@@ -850,16 +869,7 @@ def _cmd_status(args: argparse.Namespace, config: AppConfig) -> int:
             },
         }
         # Canonical 流水线（Phase 4–5）现状：只读统计，不写盘
-        normalized_dir = config.paths.data_dir / "normalized"
-        payload["canonical"] = {
-            "normalized_dir": str(normalized_dir),
-            "normalized_files": (
-                len([item for item in normalized_dir.glob("*.json")])
-                if normalized_dir.is_dir()
-                else 0
-            ),
-            "pipeline": ["normalize", "render", "rebuild-index"],
-        }
+        payload["canonical"] = _canonical_status(config)
     finally:
         connection.close()
 
