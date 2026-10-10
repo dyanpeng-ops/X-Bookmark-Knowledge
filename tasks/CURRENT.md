@@ -58,7 +58,12 @@
   - CLI `rebuild-index`：默认**只演练**，须 `--apply` 才落盘；旧库自动备份 `state.db.bak-<UTC>`
   - **重置语义写进 `--help`**（D4 要求）；`tests/test_storage_rebuild.py` **22 用例**
   - 含任务书指定用例：**删库 → 重建 → 内容索引逐条一致**
-- **Step 5 待续**：全量验收（真实数据**只读 dry-run**，需另行批准）
+- **Step 5 已完成**（只读 dry-run 验收 10/10）：
+  5 条真实书签 → Canonical 校验 → JSON/Markdown 投影 → `rebuild-index` 建索引；
+  三处 tweet_id 集合一致、content_hash 逐条一致、二次写入 **0 写**、
+  整库重建后运行态回初始态、真实 `data/`+`knowledge/` 指纹**前后未变**（只读证明）。
+- **Phase 4 五个 Step 全部交付** → 完成报告：`docs/X-Bookmark-Knowledge-Phase4-Report-2026-10-10.md`
+- **下一步 Phase 5（CLI）**：前置需裁定 S2（Collector Protocol 拆分）与 R1（新旧模块关系）
 
 - **任务书**：`tasks/PHASE-4-STORAGE.md`（本轮新建；含 5 个 Step 与验收 A–H）
 - **Step 1 已完成**：`src/storage/json_projection.py` —— Canonical JSON 投影

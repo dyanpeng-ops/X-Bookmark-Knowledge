@@ -44,6 +44,41 @@
 
 ---
 
+## [Phase 4 · Step 5 + Phase 4 收尾] 2026-10-10 — 真实数据只读 dry-run 验收（Phase 4 完成）
+
+### Verified（真实数据**只读** dry-run，10 项全通过）
+
+对 5 条真实书签跑端到端只读演练（输出仅落临时目录，真实 `data/`、`knowledge/` **零写入**）：
+
+| 检查 | 结果 |
+|---|---|
+| 上游 JSONL → Canonical 校验 | 5/5 通过 |
+| Canonical JSON / Markdown 投影 | 5 + 5，失败 0、冲突 0 |
+| `rebuild-index` 内容索引 | inserted=5 |
+| **三处 tweet_id 集合一致**（JSON/Markdown/SQLite） | 5 = 5 = 5 |
+| `content_hash` 与 SQLite 逐条一致 | 5/5 |
+| **幂等**：二次写入 0 写，SQLite 全 unchanged | json=0 / md=0 / sqlite=5 |
+| **R6**：整库重建后运行态回初始态 | `NEW` / 0 / `NULL` |
+| **只读证明**：真实目录指纹前后相同 | data 29 文件、knowledge 14 文件，sha256 未变 |
+
+只读证明用「相对路径 + 大小 + `mtime_ns`」指纹前后比对，而非自述。
+可复跑脚本：`X-Bookmark-Knowledge-Automation/scripts/step5-dryrun`。
+
+### Docs
+
+- 新增 `docs/X-Bookmark-Knowledge-Phase4-Report-2026-10-10.md`：Phase 4 完成报告
+  （四个 Step 的交付与提交、S5 验收结果、Muse 审计历史、**如实列出的 5 项缺口**、下一步）。
+- `tasks/PHASE-4-STORAGE.md` / `tasks/CURRENT.md`：S5 标记完成。
+
+### Noted（未覆盖，如实记录）
+
+- dry-run 仅 5 条样本，未覆盖 `x_article`/`quoted_tweet`/媒体的全部分支；
+- Phase 4 未做真实落盘（属 Phase 7 `process` 范围）；
+- frontmatter 未产出 `tags`/`categories`/`engagement`（Canonical 无此字段，不编造）；
+- `src/storage/` 与旧 `src/ingest`/`src/markdown`/`src/database` 仍**并存**（R1 未决）。
+
+---
+
 ## [Phase 4 · Step 4] 2026-10-10 — rebuild-index（删库重建内容索引）
 
 ### Added

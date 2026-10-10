@@ -49,7 +49,7 @@ Knowledge-Agent、AI 分类/摘要/标签、Embedding/RAG、外链抓取、新 S
 | S2 ✅ | **Markdown 投影**：路径 `{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`、frontmatter 14 键、正文两段式、不覆盖内容不同的既有文件 | ✅ 已交付：`src/storage/markdown_projection.py` + `tests/test_storage_markdown.py`（30 用例）；全量零回归 |
 | S3 ✅ | **SQLite 索引**：表结构按 R6 两类划分；写入/更新幂等 | ✅ 已交付：新增 19 用例 + 既有 database 层 70/70 不回归 |
 | S4 ✅ | **rebuild-index**：删库重建；运行态重置 | ✅ 已交付：`src/storage/rebuild.py` + CLI；22 用例（含「删库→重建→内容索引一致」）|
-| S5 | 全量回归 + 真实数据**只读 dry-run** 验收（需另行批准） | 报告 |
+| S5 ✅ | 全量回归 + 真实数据**只读 dry-run** 验收 | ✅ 已完成：10 项检查全通过（见 `docs/X-Bookmark-Knowledge-Phase4-Report-2026-10-10.md`）|
 
 ## 5. 验收标准
 
@@ -90,7 +90,7 @@ S2 的决策时点应放在 **Phase 5（CLI）** 之前——CLI 才会按 Proto
 | S2 Markdown 投影 | ✅ 已完成 | `src/storage/markdown_projection.py`；`tests/test_storage_markdown.py` **30 用例**；变异测试 2/2 被捕获；全量 **592 用例**失败集 md5 未变（零回归）|
 | S3 SQLite 索引（R6 两类字段） | ✅ 已完成 | `src/database/r6_fields.py` + `index_store.py` + `schema.py`（migration 3）；`tests/test_database_r6.py` **19 用例**；全量失败集与基线一致（零回归）|
 | S4 `rebuild-index` | ✅ 已完成 | `src/storage/rebuild.py` + `src/cli/main.py`（`rebuild-index`）；`tests/test_storage_rebuild.py` **22 用例**；全量零回归 |
-| S5 全量验收 + 真实数据 dry-run | ⏳ 待批准 | — |
+| S5 全量验收 + 真实数据 dry-run | ✅ 已完成 | 只读 dry-run 10/10：5 条真实书签 → JSON/Markdown/SQLite 三处一致、幂等 0 写、运行态重置、真实目录指纹前后未变 |
 
 ### S2 实现要点
 
