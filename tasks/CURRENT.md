@@ -3,6 +3,14 @@
 > 本文件是「当前状态板」，只放进度总览 + 当前 Phase 指针 + 下一步。
 > 每个 Phase 的详细任务书独立成文件：`tasks/PHASE-N-NAME.md`。
 
+## 当前指针（2026-10-10）
+
+- **已完成**：Phase 0–4；Phase 5 的 `normalize` / `render` / `rebuild-index` / `status` / `doctor`。
+- **当前状态**：项目 **663 用例 / 9 个平台语义失败**（与基线逐条一致）；自动化流水线 **160 用例全绿**；
+  审计轮 8–15 全部 **PASS**（18 个文件已接收），轮 16–20 待复审。
+- **下一步被阻塞于用户裁决** → **`docs/DECISION-REQUESTS.md`（D-1…D-6，一行即可回复）**。
+  在裁定前，开发方只做不越权的加固与自验，不自行推进被阻塞的 Phase。
+
 ## 进度总览
 
 | Phase | 名称 | 状态 | 任务书 |
@@ -11,13 +19,13 @@
 | 1 | 架构设计 | ✅ 完成 | — |
 | 2 | Canonical Schema | ✅ 完成（28 用例绿，已提交 `498236a`） | — |
 | **3** | **Collector Adapter** | ✅ **实现完毕、已离线验收、已提交 `498236a`** | `PHASE-3-COLLECTOR-ADAPTER.md` |
-| **4** | **Storage** | 🔄 **进行中（Step 1–2/5 完成）** | `PHASE-4-STORAGE.md` |
-| 5 | CLI | ⏳ 待开始 | `PHASE-5-CLI.md` |
-| 6 | Cross Platform | ⏳ 待开始 | `PHASE-6-CROSS-PLATFORM.md` |
-| 7 | Git Sync | ⏳ 待开始 | `PHASE-7-GIT-SYNC.md` |
-| 8 | Knowledge-Agent | ⏳ 待开始 | `PHASE-8-KNOWLEDGE-AGENT.md` |
+| **4** | **Storage** | ✅ **完成**（三投影 + 可重建索引；报告见 `docs/X-Bookmark-Knowledge-Phase4-Report-2026-10-10.md`） | `PHASE-4-STORAGE.md` |
+| **5** | **CLI** | 🟡 **部分完成**（`normalize`/`render`/`rebuild-index`/`status`/`doctor` 已交付；**剩余被 D-1/D-2 阻塞**）| `PHASE-5-CLI.md` |
+| 6 | Cross Platform | ⏸ **方案待批准**（D-3；方案 `docs/PHASE6-PREP-PLAN.md`）| `PHASE-6-CROSS-PLATFORM.md` |
+| 7 | Git Sync | ⛔ **被 D-4 阻塞**：`.gitignore` 与 `ARCHITECTURE §8.2` 相反（方案 `docs/PHASE7-SYNC-PREP-PLAN.md`）| `PHASE-7-GIT-SYNC.md` |
+| 8 | Knowledge-Agent | ⏳ 待 Phase 7 | `PHASE-8-KNOWLEDGE-AGENT.md` |
 
-## 当前 Phase 3 — Collector Adapter（实现完毕、已离线验收）
+## Phase 3 — Collector Adapter（✅ 已完成，存档）
 
 - **任务书**：`tasks/PHASE-3-COLLECTOR-ADAPTER.md`（33 节，含验收标准 A–J）
 - **目标**：建立 `Collector → RawCollectorData → CanonicalBookmark` 解耦链路，让 Field Theory 只是 Collector 实现。
@@ -37,7 +45,7 @@
   - 未写 `data/`、`knowledge/`、`schema/`、`config/`；未联网
   - 提交前独立审核：4/4 变异测试被捕获、AST 依赖边界断言、`schema` 键集合与输出完全一致（见 `docs/phase3-preflight-review.md` §10.7）
 
-## 当前 Phase 4 — Storage（进行中，Step 1–2 完成）
+## Phase 4 — Storage（✅ 已完成，五个 Step 全部交付）
 
 - **Step 2 已完成**：`src/storage/markdown_projection.py` —— Markdown 投影
   （`knowledge/X-Bookmarks/{YYYY}/{MM}/{YYYYMMDD}-{tweet_id}.md`）
