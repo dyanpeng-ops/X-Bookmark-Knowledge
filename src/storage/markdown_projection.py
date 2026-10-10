@@ -113,6 +113,32 @@ def markdown_path_for(knowledge_dir: str | os.PathLike[str], bookmark: Mapping[s
 # ── frontmatter / 正文 ──────────────────────────────────────────────────────
 
 
+#: 需要显式转义的 C0 控制字符（含 DEL）。YAML 双引号标量内用 `\\r`/`\\t`/`\\uXXXX`。
+_YAML_NAMED_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _escape_yaml_string(text: str) -> str:
+    """把字符串转成 YAML 双引号标量安全的内容。
+
+    审计 F-005：此前只转义 ``\\`` / ``"`` / ``\n``，**遗漏 ``\r``/``\t`` 及其余 C0 控制字符**
+    ——元数据（作者名、URL 等）一旦含制表符/回车等，frontmatter 会被解析成非法或异值的 YAML。
+    """
+
+    parts: list[str] = []
+    for ch in text:
+        if ch == "\\":
+            parts.append("\\\\")
+        elif ch == '"':
+            parts.append('\\"')
+        elif ch in _YAML_NAMED_ESCAPES:
+            parts.append(_YAML_NAMED_ESCAPES[ch])
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            parts.append(f"\\u{ord(ch):04x}")
+        else:
+            parts.append(ch)
+    return "".join(parts)
+
+
 def _yaml_scalar(value: Any) -> str:
     if value is None:
         return "null"
@@ -122,9 +148,7 @@ def _yaml_scalar(value: Any) -> str:
         return str(value)
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_yaml_scalar(item) for item in value) + "]"
-    text = str(value)
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
-    return f'"{escaped}"'
+    return f'"{_escape_yaml_string(str(value))}"'
 
 
 def frontmatter_mapping(bookmark: Mapping[str, Any]) -> dict[str, Any]:

@@ -148,6 +148,24 @@ class FrontmatterTests(unittest.TestCase):
     def test_unicode_not_escaped(self):
         self.assertIn("Sample Author", render_frontmatter(bookmark()))
 
+    def test_control_characters_round_trip(self):
+        """审计 F-005：frontmatter 元数据含 C0 控制字符时必须往返保真。
+
+        原先只转义 ``\\n``，``\\r``/``\\t`` 及其余 C0 会产出非法或异值的 YAML。
+        """
+
+        controls = [chr(code) for code in range(0x20) if code != 0x0A] + [chr(0x7F)]
+        for ch in controls:
+            with self.subTest(codepoint=hex(ord(ch))):
+                data = bookmark(author=f"Sample{ch}Author")
+                parsed, _ = split_frontmatter(render_markdown(data))
+                self.assertEqual(parsed["author"], f"Sample{ch}Author")
+
+    def test_newline_in_metadata_round_trips(self):
+        data = bookmark(author="line1\nline2")
+        parsed, _ = split_frontmatter(render_markdown(data))
+        self.assertEqual(parsed["author"], "line1\nline2")
+
     def test_quote_and_backslash_escaped(self):
         front = render_frontmatter(bookmark(author='He said "hi" \\ bye'))
         parsed = yaml.safe_load(front.split("---\n")[1].rsplit("---", 1)[0])
