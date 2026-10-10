@@ -521,7 +521,7 @@
 - `media` 首次：copied 6 / failed 0；第二次：unchanged 6 / copied 0（幂等）
 - SQLite：6/6 行 `local_path` 指向 `knowledge/X-Bookmarks/.../assets/{tweet_id}/`，与 `data/upstream/media/` 源文件 SHA-256 逐条一致
 - `process --overwrite`：written 1 / unchanged 4（只有含推文媒体的那 1 份文件变化）；再次 `process`：written 0 / unchanged 5
-- `## media` 段由远程 `https://pbs.twimg.com/media/...` 改为 `assets/2099122261772968036/cf1939a0c2c6b71d.png`（文件存在）
+- `## media` 段由远程 `https://pbs.twimg.com/media/...` 改为 `assets/1900000000000000101/cf1939a0c2c6b71d.png`（文件存在）
 - `sync --skip-collect`：`media rows : 0 new, 0 updated, 6 unchanged` → 本地路径不被回退
 - 全量离线测试：**272 用例，exit 0**
 

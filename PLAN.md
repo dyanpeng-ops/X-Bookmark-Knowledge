@@ -304,7 +304,7 @@ SQLite             : 6/6 行 local_path 位于 knowledge/X-Bookmarks/{YYYY}/{MM}
                      与 data/upstream/media/ 源文件 SHA-256 逐条一致
 process --overwrite: written 1 / unchanged 4       ← 只有含推文媒体的那份文件变化
 process（再跑）     : written 0 / unchanged 5
-Markdown ## media  : assets/2099122261772968036/cf1939a0c2c6b71d.png（不再引用远程 URL）
+Markdown ## media  : assets/1900000000000000101/cf1939a0c2c6b71d.png（不再引用远程 URL）
 sync --skip-collect: media rows : 0 new, 0 updated, 6 unchanged   ← 本地路径不被回退
 全量测试            : 272 用例，exit 0
 ```

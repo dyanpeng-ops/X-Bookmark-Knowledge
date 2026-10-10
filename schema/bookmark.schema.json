@@ -37,7 +37,7 @@
     },
     "author_username": {
       "type": "string",
-      "description": "作者 handle（如 yhslgg，不含 @）。决策 D2。",
+      "description": "作者 handle（如 sample_author，不含 @）。决策 D2。",
       "minLength": 1
     },
     "created_at": {

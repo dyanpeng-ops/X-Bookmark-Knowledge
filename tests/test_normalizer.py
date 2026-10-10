@@ -205,13 +205,13 @@ class AuthorTests(NormalizerTestCase):
         payload_obj = payload(
             author={
                 "id": "173484971",
-                "handle": "yhslgg",
-                "name": "老杨啊 | AI产品商业化",
+                "handle": "sample_author",
+                "name": "Sample Author | Synthetic",
             }
         )
         bookmark = self.normalize_one(payload_obj)
-        self.assertEqual(bookmark["author"], "老杨啊 | AI产品商业化")
-        self.assertEqual(bookmark["author_username"], "yhslgg")
+        self.assertEqual(bookmark["author"], "Sample Author | Synthetic")
+        self.assertEqual(bookmark["author_username"], "sample_author")
         self.assertEqual(bookmark["author_id"], "173484971")
 
     def test_falls_back_to_top_level_name_and_handle(self):

@@ -41,8 +41,8 @@ STUB = PROJECT_ROOT / "tests" / "support" / "stub_fieldtheory.py"
 
 POSTED_AT = "Mon Sep 14 01:24:21 +0000 2026"
 UPMAP = {
-    "tweetId": "2099122261772968036",
-    "url": "https://x.com/sample/status/2099122261772968036",
+    "tweetId": "1900000000000000101",
+    "url": "https://x.com/sample/status/1900000000000000101",
     "text": "第一行\n第二行",
     "authorHandle": "sample",
     "authorName": "Sample Author",
@@ -50,7 +50,7 @@ UPMAP = {
     "postedAt": POSTED_AT,
     "bookmarkedAt": None,
     "syncedAt": "2026-09-16T00:00:01.000Z",
-    "conversationId": "2099122261772968036",
+    "conversationId": "1900000000000000101",
     "language": "zh",
     "possiblySensitive": False,
     "engagement": {"likeCount": 10, "repostCount": 2, "replyCount": 1, "quoteCount": 0, "bookmarkCount": 5},
@@ -103,7 +103,7 @@ class RenderTests(unittest.TestCase):
 
     def test_frontmatter_values(self):
         fm = build_frontmatter(UPMAP, ENRICH)
-        self.assertEqual(fm["tweet_id"], "2099122261772968036")
+        self.assertEqual(fm["tweet_id"], "1900000000000000101")
         self.assertEqual(fm["created_at"], "2026-09-14T01:24:21Z")
         self.assertEqual(fm["media_count"], 1)
         self.assertEqual(fm["link_count"], 2)
